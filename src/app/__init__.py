@@ -18,11 +18,13 @@ def create_app():
     from app.admin.routes import admin_bp
     from app.owner.routes import owner_bp
     from app.storage.routes import store_bp
+    from app.recordings.routes import recordings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(owner_bp)
     app.register_blueprint(store_bp)
+    app.register_blueprint(recordings_bp)
 
     return app

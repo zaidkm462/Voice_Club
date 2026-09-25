@@ -63,3 +63,17 @@ def get_recordings(uid):
     return [tuple(i) for i in x]
 
 
+def submit_record(uid, record_id):
+    print("tstttt:", uid, record_id)
+    conn = get_db()
+    curr = conn.cursor()
+    if not record_id: return False
+    curr.execute("SELECT user_id from recordings where id=?", (record_id,))
+    if uid != tuple(curr.fetchone())[0]: return False
+    curr.execute("UPDATE recordings SET submitted=1 where id=?", (record_id,)) 
+    curr.execute("UPDATE accounts SET status='pending' where id=?", (uid,)) 
+    curr.execute("DELETE FROM recordings where id != ? and user_id = ?", (record_id, uid))
+    print("fuccccccccc")
+    conn.commit()
+    return True
+

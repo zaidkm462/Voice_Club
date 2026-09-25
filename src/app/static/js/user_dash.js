@@ -186,18 +186,35 @@ function renderList() {
       <div class="d-flex gap-2 mt-auto" data-id="${r.id}">
         <button class="btn btn-gold flex-grow-1" data-a="play"><i class="bi bi-play-fill"></i> تشغيل</button>
         <button class="btn btn-line" data-a="send" ${r.status !== 'draft' ? 'disabled' : ''}><i class="bi bi-send"></i> إرسال</button>
-        <button class="btn btn-line btn-del" data-a="del" aria-label="حذف"><i class="bi bi-trash3"></i></button>
+        <button class="btn btn-line btn-del" data-a="del" aria-label="حذف" ${r.status !== 'draft' ? 'disabled' : ''}><i class="bi bi-trash3"></i></button>
       </div>
     </div></article></div>`).join('')
         : `<div class="col-12"><div class="card"><div class="card-body text-center p-5"><i class="bi bi-mic fs-1 mute"></i><p class="fs-5 mb-3">لا توجد تسجيلات بعد.</p><a href="#" data-go="new" class="btn btn-gold">سجّل صوتك الآن</a></div></div></div>`;
 }
+
+async function submit_record(id) {
+    try {
+        const res = await fetch("/api/recordings/submit", {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: JSON.stringify({"record_id": id}),
+            headers: { "Content-Type": "application/json"}
+        });
+        if (!res.ok) {toast('تعذر ارسال التسجيل'); return;}
+        loadData(true);
+    } catch (err) {
+        console.error('loadData failed:', err);
+        toast('تعذر ارسال التسجيل');
+    }
+}
+
 let target = null;
 $('list').addEventListener('click', e => {
     const b = e.target.closest('[data-a]'); if (!b) return;
     const id = +b.parentElement.dataset.id, r = recs.find(x => x.id === id);
     if (!r) return;
     if (b.dataset.a === 'play') openReader(r);                       // ← فتح القارئ
-    if (b.dataset.a === 'send') { r.status = 'review'; refresh(); toast('تم إرسال التسجيل للمراجعة'); }
+    if (b.dataset.a === 'send') { r.status = 'review'; refresh(); toast('تم إرسال التسجيل للمراجعة');submit_record(r.id); }
     if (b.dataset.a === 'del') { target = r; $('delName').textContent = r.title; M.del.show(); }
 });
 $('delOk').onclick = () => { recs = recs.filter(r => r !== target); M.del.hide(); refresh(); toast('تم حذف التسجيل'); };
@@ -392,7 +409,6 @@ function renderMsgs() {
     document.querySelectorAll('.ucnt').forEach(e => { e.textContent = n; e.classList.toggle('d-none', !n); });
     $('mpill').className = 'pill py-0 ' + (n ? 's1' : 's0');
     $('mpill').textContent = n ? n + ' جديدة' : 'لا جديد';
-    $('readAll').classList.toggle('d-none', !n);
     $('mlist').innerHTML = msgs.length ? msgs.map(m => `
     <div class="col"><article class="card msg h-100 ${m.unread ? 'unread' : ''}"><div class="card-body p-4 d-flex gap-3">
       <span class="icon-c"><i class="bi bi-envelope${m.unread ? '-fill' : '-open'}"></i></span>
@@ -411,7 +427,6 @@ $('mlist').addEventListener('click', e => {
     if (m) m.unread = false;
     renderMsgs();
 });
-$('readAll').onclick = () => { msgs.forEach(m => m.unread = false); renderMsgs(); toast('تم تحديد كل الرسائل كمقروءة'); };
 
 /* ============ التنقل والطي ============ */
 const mwrap = bootstrap.Collapse.getOrCreateInstance($('msgsWrap'), { toggle: false });
