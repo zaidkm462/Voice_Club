@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-bs-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>جرب صوتك | لوحة المستخدم</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<link rel="stylesheet" href="{{url_for('static', filename='css/user_dash.css')}}">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js" defer></script>
+<script src="{{ url_for('static', filename='js/user_dash.js') }}" defer></script>
+<script src="/static/js/pdflipbook.js"></script>
+</head>
+<body>
+
+<div id="app" class="d-lg-flex min-vh-100">
+
+  <!-- ===== الشريط الجانبي (الحاسوب) ===== -->
+  <aside class="side d-none d-lg-flex flex-column flex-shrink-0 p-4 border-end position-sticky top-0 vh-100">
+    <div class="d-flex align-items-center gap-3 mb-5">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="شعار جرب صوتك" width="64" height="64" class="rounded-circle">
+      <b class="fs-3">جرب صوتك</b>
+    </div>
+    <nav class="nav-s d-grid gap-2" aria-label="القائمة الرئيسية">
+      <a href="#" class="act" data-go="home"><i class="bi bi-house fs-5"></i>الرئيسية</a>
+      <a href="#" data-go="new"><i class="bi bi-mic fs-5"></i>تسجيل جديد</a>
+      <a href="#" data-go="recs"><i class="bi bi-collection-play fs-5"></i>تسجيلاتي السابقة</a>
+      <a href="#" data-go="msgs"><i class="bi bi-chat-dots fs-5"></i>الرسائل<span class="pill s1 ms-auto py-0 px-2 ucnt">3</span></a>
+    </nav>
+    <div class="card mt-auto"><div class="card-body d-flex align-items-center gap-3">
+      <span class="icon-c" style="background:var(--gold)">{{user.name[0]}}</span>
+      <div class="lh-sm"><b>{{user.name}}</b><div class="mute" style="font-size:.95rem">{{user.role}}</div></div>
+    </div></div>
+  </aside>
+
+  <!-- ===== المحتوى ===== -->
+  <main class="flex-grow-1 px-3 pt-4 px-lg-5 pt-lg-5 pb-5" style="min-width:0">
+  <div class="mx-auto" style="max-width:75rem">
+
+    <!-- ترويسة الجوال -->
+    <div class="d-flex align-items-center gap-3 mb-4 d-lg-none">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="شعار جرب صوتك" width="56" height="56" class="rounded-circle">
+      <b class="fs-4">جرب صوتك</b>
+    </div>
+
+    <!-- اسم المستخدم -->
+    <header class="mb-4 mb-lg-5">
+      <p class="mute mb-0">أهلاً بك</p>
+      <h1 class="hero fw-bolder mb-0 fs-1" id="uname">{{user.name}}</h1>
+    </header>
+
+    <div class="row g-3 g-lg-4">
+
+      <!-- حالة المستخدم -->
+      <section class="col-xl-8" aria-labelledby="st-h">
+        <div class="card h-100"><div class="card-body p-4 p-lg-5 d-flex flex-column">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+            <h2 id="st-h" class="fs-3 fw-bolder mb-0">حالة المستخدم</h2>
+            <span id="pill" class="pill s0"><i></i><span id="pt"></span></span>
+          </div>
+          <div class="steps my-auto" id="steps" aria-hidden="true">
+            <div class="step"><span class="dot">1</span>لم يرسل تسجيل</div><div class="bar-s"></div>
+            <div class="step"><span class="dot">2</span>جار المراجعة</div><div class="bar-s"></div>
+            <div class="step"><span class="dot">3</span>تمت الموافقة</div>
+          </div>
+          <p id="msg" class="mute mt-4 mb-0"></p>
+        </div></div>
+      </section>
+
+      <!-- تسجيل جديد -->
+      <div class="col-xl-4">
+        <a href="#" data-go="new" class="card action primary-card h-100 text-reset">
+          <div class="card-body p-4 p-xl-5 d-flex flex-row flex-wrap flex-xl-nowrap flex-xl-column align-items-center gap-3 gap-xl-4">
+            <div class="newtop">
+              <span class="icon-c"><i class="bi bi-mic-fill"></i></span>
+              <div class="deco d-none d-xl-flex" aria-hidden="true">
+                <b style="height:30%"></b><b style="height:55%"></b><b style="height:80%"></b><b style="height:100%"></b><b style="height:70%"></b><b style="height:90%"></b><b style="height:50%"></b><b style="height:65%"></b><b style="height:35%"></b>
+              </div>
+            </div>
+            <div class="newtext d-xl-flex flex-column justify-content-xl-center">
+              <b class="newtitle d-block fw-bolder mb-1">تسجيل جديد</b>
+              <span style="opacity:.8">سجّل صوتك الآن وأرسله للمراجعة.</span>
+            </div>
+            <span class="btn btn-gold newbtn w-100 d-inline-flex align-items-center justify-content-center gap-2"><i class="bi bi-mic-fill"></i>ابدأ التسجيل</span>
+          </div>
+        </a>
+      </div>
+
+      <!-- تسجيلاتي السابقة -->
+      <div class="col-md-8">
+        <a href="#recsWrap" data-go="recs" class="card action h-100">
+          <div class="card-body p-4 d-flex align-items-center gap-3">
+            <span class="icon-c"><i class="bi bi-collection-play"></i></span>
+            <div class="flex-grow-1"><b class="fs-4 d-block">تسجيلاتي السابقة</b><span class="mute">استمع إلى تسجيلاتك وأرسلها أو احذفها.</span></div>
+            <i class="bi bi-chevron-down fs-4 mute" id="chev"></i>
+          </div>
+        </a>
+      </div>
+
+      <!-- الرسائل -->
+      <div class="col-md-4">
+        <a href="#" data-go="msgs" class="card action h-100">
+          <div class="card-body p-4 d-flex align-items-center gap-3">
+            <span class="icon-c"><i class="bi bi-chat-dots"></i></span>
+            <div class="flex-grow-1"><b class="fs-4 d-block">الرسائل</b><span id="mpill" class="pill s1 py-0"></span></div>
+            <i class="bi bi-chevron-down fs-4 mute" id="chevM"></i>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- ===== قائمة التسجيلات (تظهر تحت عند الضغط) ===== -->
+    <section id="recsWrap" class="collapse mt-4 mt-lg-5" aria-labelledby="recs-h">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h2 id="recs-h" class="fs-3 fw-bolder mb-0">تسجيلاتي السابقة <span id="cnt" class="mute fs-5"></span></h2>
+        <button class="btn btn-line btn-sm" id="hideRecs"><i class="bi bi-chevron-up"></i> إخفاء</button>
+      </div>
+      <div id="list" class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 g-lg-4"></div>
+    </section>
+
+    <!-- ===== الرسائل (تظهر تحت عند الضغط) ===== -->
+    <section id="msgsWrap" class="collapse mt-4 mt-lg-5" aria-labelledby="msgs-h">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h2 id="msgs-h" class="fs-3 fw-bolder mb-0">الرسائل</h2>
+        <div class="d-flex gap-2">
+          <button class="btn btn-line btn-sm" id="readAll"><i class="bi bi-check2-all"></i> تحديد الكل كمقروء</button>
+          <button class="btn btn-line btn-sm" id="hideMsgs"><i class="bi bi-chevron-up"></i> إخفاء</button>
+        </div>
+      </div>
+      <div id="mlist" class="row row-cols-1 row-cols-lg-2 g-3 g-lg-4"></div>
+    </section>
+  </div>
+  </main>
+</div>
+
+<!-- نافذة تأكيد الحذف -->
+<div class="modal fade" id="delModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content p-2">
+    <div class="modal-body text-center">
+      <i class="bi bi-trash3 fs-1" style="color:#B3261E"></i>
+      <h2 class="fs-4 fw-bolder mt-2">حذف التسجيل؟</h2>
+      <p class="mute mb-4" id="delName"></p>
+      <div class="d-flex gap-2"><button class="btn btn-line flex-fill" data-bs-dismiss="modal">إلغاء</button><button class="btn btn-red flex-fill" id="delOk">نعم، احذف</button></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- إشعار -->
+<div class="toast-wrap toast-container position-fixed start-50 translate-middle-x p-3" style="bottom:1.5rem;z-index:1090">
+  <div id="toast" class="toast border-0" role="status" aria-live="polite"><div class="toast-body fs-6" id="toastMsg"></div></div>
+</div>
+<!-- ===== وضع القراءة: عرض PDF بتقليب الصفحات مع الصوت ===== -->
+<div id="reader" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+  <header class="rd-top d-flex align-items-center gap-3 px-3 px-lg-4 py-2">
+    <button class="btn btn-line" id="rdBack"><i class="bi bi-arrow-right"></i> رجوع</button>
+    <button class="btn btn-line"><i class="bi bi-file-earmark-music"></i> تنزيل الصوت</button>
+    <button class="btn btn-line"><i class="bi bi-filetype-pdf"></i> تنزيل pdf</button>
+    <span class="mute" id="pgInfo" style="white-space:nowrap"></span>
+  </header>
+  <div class="rd-stage">
+    <div id="stage"></div>
+    <div id="rdLoad" class="rd-load" style="background-color: aqua;"></div>
+    <button id="pgPrev" class="rd-arrow prev" aria-label="الصفحة السابقة"><i class="bi bi-chevron-left"></i></button>
+    <button id="pgNext" class="rd-arrow next" aria-label="الصفحة التالية"><i class="bi bi-chevron-right"></i></button>
+  </div>
+  <footer class="rd-dock"><div class="mx-auto" style="max-width:60rem">
+    <div class="wave" id="pWave" role="slider" aria-label="موضع التشغيل"></div>
+    <div class="d-flex align-items-center justify-content-between gap-3">
+      <div dir="ltr" class="d-flex align-items-baseline gap-2"><span class="tnow" id="tNow">0:00</span><span class="mute" id="tTot"></span></div>
+      <div class="d-flex gap-2">
+        <button id="pBtn" class="btn btn-gold px-4"></button>
+      </div>
+    </div>
+  </div></footer>
+</div>
+</body>
+</html>
