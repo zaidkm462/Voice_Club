@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template, send_from_directory, abort
 
-from decorators import admin_required
-from src import config
+from app.decorators import admin_required
+import config
 
 store_bp = Blueprint(
     "storage",

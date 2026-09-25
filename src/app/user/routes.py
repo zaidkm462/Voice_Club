@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template, g, request
 
-import db
-from decorators import login_required
+import app.db as db
+from app.decorators import login_required
 
 
 user_bp = Blueprint(

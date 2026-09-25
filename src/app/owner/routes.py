@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, render_template
 
-from decorators import owner_required
+from app.decorators import owner_required
 
 
 owner_bp = Blueprint(

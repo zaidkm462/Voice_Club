@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, render_template
 
-from decorators import admin_required
+from app.decorators import admin_required
 
 
 admin_bp = Blueprint(

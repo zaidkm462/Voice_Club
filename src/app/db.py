@@ -2,7 +2,7 @@ import sqlite3
 
 from flask import g
 
-from  src.config import DATABASE
+from  config import DATABASE
 
 
 def get_db_test():

@@ -1,5 +1,5 @@
 from flask import Flask
-from authen import authenticate
+from app.authen import authenticate
 
 
 
@@ -13,11 +13,11 @@ def create_app():
     def before_request():
         authenticate()
 
-    from auth.routes import auth_bp
-    from user.routes import user_bp
-    from admin.routes import admin_bp
-    from owner.routes import owner_bp
-    from storage.routes import store_bp
+    from app.auth.routes import auth_bp
+    from app.user.routes import user_bp
+    from app.admin.routes import admin_bp
+    from app.owner.routes import owner_bp
+    from app.storage.routes import store_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)

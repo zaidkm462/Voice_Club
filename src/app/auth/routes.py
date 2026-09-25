@@ -1,7 +1,7 @@
 from flask import Blueprint, redirect, render_template, url_for, g, request, jsonify, make_response
 
-import db
-from authen import hash_token, generate_token
+import app.db as db
+from app.authen import hash_token, generate_token
 
 auth_bp = Blueprint("auth", __name__)
 

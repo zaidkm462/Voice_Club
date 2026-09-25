@@ -3,7 +3,7 @@ import secrets
 
 from flask import g, request
 
-from db import get_db
+from app.db import get_db
 
 
 def generate_token():
