@@ -1,10 +1,13 @@
 from flask import Flask
 from app.authen import authenticate
+from flask_cors import CORS
+
 
 
 
 def create_app():
     app = Flask(__name__)
+    CORS(app)
 
     app.config["SECRET_KEY"] = "change-this-key"
 
@@ -19,6 +22,7 @@ def create_app():
     from app.owner.routes import owner_bp
     from app.storage.routes import store_bp
     from app.recordings.routes import recordings_bp
+    from app.pdfs.routes import pdf_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -26,5 +30,6 @@ def create_app():
     app.register_blueprint(owner_bp)
     app.register_blueprint(store_bp)
     app.register_blueprint(recordings_bp)
+    app.register_blueprint(pdf_bp)
 
     return app

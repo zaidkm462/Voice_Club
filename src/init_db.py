@@ -20,7 +20,7 @@ def init_database():
             CHECK (role IN ('user', 'admin', 'owner')),
 
         status TEXT NOT NULL DEFAULT 'approved'
-            CHECK (status IN ('unsent', 'pending', 'approved', 'rejected'),
+            CHECK (status IN ('unsent', 'pending', 'approved', 'rejected')),
 
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );

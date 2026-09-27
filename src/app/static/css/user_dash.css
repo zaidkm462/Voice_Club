@@ -347,24 +347,118 @@ a.card {
     }
 }
 
-.newtext { flex: 1 1 0; min-width: 0 }
+.newtext {
+    flex: 1 1 0;
+    min-width: 0
+}
 
 /* ===== تصغير الواجهة على الحاسوب (يعادل تصغير المتصفح ~80%) ===== */
-@media (min-width:992px) { html { font-size: 81.25% } }
+@media (min-width:992px) {
+    html {
+        font-size: 81.25%
+    }
+}
 
 /* ===== وضع القراءة: عرض PDF بتقليب الصفحات مع الصوت ===== */
-#reader { display: none; position: fixed; inset: 0; z-index: 1050; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top) }
-.reading #reader { display: flex }
-.reading #app { display: none !important }
-.reading { overflow: hidden }
-.rd-top { border-bottom: 1.5px solid var(--line) }
-.rd-stage { flex: 1; min-height: 0; position: relative; padding: 1rem; background: rgba(11, 35, 63, .07) }
-#stage, #book { width: 100%; height: 100% }
-.rd-load { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .75rem; text-align: center; color: var(--mute); pointer-events: none }
-.rd-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 3rem; height: 3rem; border-radius: 50%; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); display: grid; place-items: center; font-size: 1.3rem; z-index: 5; opacity: .92 }
-.rd-arrow:hover { border-color: var(--gold) }
-.rd-arrow.prev { left: .6rem }
-.rd-arrow.next { right: .6rem }
-.rd-dock { border-top: 1.5px solid var(--line); background: var(--bg); padding: .8rem 1rem calc(.8rem + env(safe-area-inset-bottom)) }
-.rd-dock .wave { height: 2.8rem; margin-bottom: .7rem; cursor: pointer }
-.tnow { font-size: 1.9rem; font-weight: 800; line-height: 1 }
+#reader {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    flex-direction: column;
+    background: var(--bg);
+    padding-top: env(safe-area-inset-top)
+}
+
+.reading #reader {
+    display: flex
+}
+
+.reading #app {
+    display: none !important
+}
+
+.reading {
+    overflow: hidden
+}
+
+.rd-top {
+    border-bottom: 1.5px solid var(--line)
+}
+
+.rd-stage {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    padding: 1rem;
+    background: rgba(11, 35, 63, .07)
+}
+
+#stage,
+#book {
+    width: 100%;
+    height: 100%
+}
+
+.rd-load {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: .75rem;
+    text-align: center;
+    color: var(--mute);
+    pointer-events: none
+}
+
+.rd-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    display: grid;
+    place-items: center;
+    font-size: 1.3rem;
+    z-index: 5;
+    opacity: .92
+}
+
+.rd-arrow:hover {
+    border-color: var(--gold)
+}
+
+.rd-arrow.prev {
+    left: .6rem
+}
+
+.rd-arrow.next {
+    right: .6rem
+}
+
+.rd-dock {
+    border-top: 1.5px solid var(--line);
+    background: var(--bg);
+    padding: .8rem 1rem calc(.8rem + env(safe-area-inset-bottom))
+}
+
+.rd-dock .wave {
+    height: 2.8rem;
+    margin-bottom: .7rem;
+    cursor: pointer
+}
+
+.tnow {
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1
+}
+
+#book {
+    --fb-bg: #e8e6dd;
+}

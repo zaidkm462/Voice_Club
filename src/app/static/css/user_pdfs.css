@@ -1,0 +1,21 @@
+:root { --voice-ink: #0B233F; --voice-gold: #CF9E39; --voice-bg: #F9F5E9; --voice-line: #C7C3B7; }
+html[data-bs-theme="light"] { --bs-body-bg: var(--voice-bg); --bs-body-color: var(--voice-ink); --bs-border-color: var(--voice-line); }
+body { background: var(--voice-bg); color: var(--voice-ink); font-family: 'Cairo', Tahoma, Arial, sans-serif; }
+.dashboard-header { background: var(--voice-ink); color: white; }
+.brand-mark { font-size: 1.65rem; font-weight: 700; }
+.role-badge { background: #f4e7c8; color: #493913; padding: .8rem 1.2rem; }
+.eyebrow { color: #776030; font-size: .85rem; }
+.card { border: 1px solid var(--voice-line); border-radius: 22px; box-shadow: 0 4px 15px rgba(11,35,63,.05); background: rgba(255,255,255,.6); }
+.stat-card { border-top: 3px solid var(--voice-gold); }
+.nav-pills .nav-link { color: var(--voice-ink); border: 1px solid var(--voice-line); background: white; }
+.nav-pills .nav-link.active, .btn-primary { background: var(--voice-ink); border-color: var(--voice-ink); color: white; }
+.btn-primary:hover { background: #35564b; border-color: #35564b; }
+.btn-primary:disabled { background: #647970; border-color: #647970; }
+.form-panel { max-width: 700px; }
+.availability-note { background: #f7f1e4; border-right: 3px solid var(--voice-gold); padding: .8rem; color: #68512b; font-size: .9rem; }
+.table th { white-space: nowrap; color: #526159; font-size: .9rem; }
+.table td { overflow-wrap: anywhere; min-width: 100px; }
+.modal-content { border-radius: 1rem; }
+.form-control:focus, .form-select:focus { border-color: var(--voice-gold); box-shadow: 0 0 0 .2rem rgba(207,158,57,.2); }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--voice-gold); outline-offset: 3px; }
+@media (max-width: 575px) { .card-body { padding: 1rem !important; } .nav-pills .nav-link { font-size: .85rem; } h1 { font-size: 1.5rem; } }

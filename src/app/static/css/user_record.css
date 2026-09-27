@@ -1,0 +1,387 @@
+/* ===== الألوان (نفس نظام لوحة المستخدم) ===== */
+:root {
+  --bg: #F9F5E9;
+  --ink: #0B233F;
+  --line: #C7C3B7;
+  --mute: #5F6A76;
+  --gold: #CF9E39;
+  --card: rgba(255, 255, 255, .6);
+  --red: #B3261E;
+}
+
+html[data-bs-theme] {
+  --bs-border-color: var(--line);
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--ink);
+  --bs-body-font-family: 'Cairo', Tahoma, sans-serif;
+  --bs-body-font-size: 1.125rem;
+  --bs-body-line-height: 1.7
+}
+
+html,
+body {
+  height: 100%
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  margin: 0;
+  overflow: hidden
+}
+
+.mute {
+  color: var(--mute)
+}
+
+:focus-visible {
+  outline: 3px solid var(--gold) !important;
+  outline-offset: 3px
+}
+
+@media (min-width:992px) {
+  html {
+    font-size: 87.5%
+  }
+}
+
+/* بطاقات وأزرار عامة (متوافقة مع بقية النظام) */
+.card {
+  --bs-card-bg: var(--card);
+  --bs-card-border-color: var(--line);
+  --bs-card-border-width: 1.5px;
+  --bs-card-border-radius: 18px;
+  color: inherit
+}
+
+.btn {
+  border-radius: 14px;
+  font-weight: 700;
+  padding: .55rem 1.1rem
+}
+
+.btn-gold {
+  --bs-btn-bg: var(--gold);
+  --bs-btn-color: #0B233F;
+  --bs-btn-border-color: var(--gold);
+  --bs-btn-hover-bg: #b98a2f;
+  --bs-btn-hover-color: #0B233F;
+  --bs-btn-hover-border-color: #b98a2f;
+  --bs-btn-active-bg: #b98a2f;
+  --bs-btn-active-color: #0B233F;
+  --bs-btn-disabled-opacity: .5;
+  font-weight: 800
+}
+
+.btn-line {
+  --bs-btn-color: var(--ink);
+  --bs-btn-border-color: var(--line);
+  --bs-btn-hover-bg: var(--card);
+  --bs-btn-hover-color: var(--ink);
+  --bs-btn-hover-border-color: var(--mute);
+  --bs-btn-active-color: var(--ink);
+  --bs-btn-active-bg: var(--card);
+  --bs-btn-disabled-color: var(--mute);
+  --bs-btn-disabled-border-color: var(--line);
+  --bs-btn-disabled-opacity: .45
+}
+
+.form-control,
+.input-group-text {
+  background: var(--card);
+  border-color: var(--line);
+  color: var(--ink)
+}
+
+.form-control:focus {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 .2rem rgba(207, 158, 57, .25)
+}
+
+.modal-content {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1.5px solid var(--line);
+  border-radius: 22px
+}
+
+.toast {
+  --bs-toast-bg: var(--ink);
+  --bs-toast-color: var(--bg);
+  --bs-toast-border-radius: 14px;
+  font-weight: 600
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  border-radius: 99px;
+  padding: .15rem .8rem;
+  font-weight: 700;
+  font-size: .9rem
+}
+
+.s0 {
+  background: var(--line);
+  color: #0B233F
+}
+
+.s1 {
+  background: var(--gold);
+  color: #0B233F
+}
+
+.s2 {
+  background: var(--ink);
+  color: var(--bg)
+}
+
+/* ===== إطار المنصة (يملأ الشاشة دائماً في هذه الصفحة) ===== */
+#reader {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top)
+}
+
+.rd-top {
+  border-bottom: 1.5px solid var(--line);
+  flex-wrap: wrap;
+  row-gap: .5rem
+}
+
+.rd-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: .75rem;
+  background: rgba(11, 35, 63, .07)
+}
+
+#stage,
+#book {
+  width: 100%;
+  height: 100%
+}
+
+.rd-load {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: .75rem;
+  text-align: center;
+  color: var(--mute);
+  background: rgba(249, 245, 233, .85);
+  z-index: 4
+}
+
+.rd-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  z-index: 5;
+  opacity: .92
+}
+
+.rd-arrow:hover {
+  border-color: var(--gold)
+}
+
+.rd-arrow.prev {
+  left: .6rem
+}
+
+.rd-arrow.next {
+  right: .6rem
+}
+
+.rd-arrow:disabled {
+  opacity: .35
+}
+
+/* الحالة الفارغة (قبل اختيار ملف) */
+.rd-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2rem
+}
+
+.rd-empty i {
+  font-size: 3.4rem;
+  color: var(--gold);
+  margin-bottom: .5rem
+}
+
+/* ===== لوحة التسجيل السفلية ===== */
+.rd-dock {
+  border-top: 1.5px solid var(--line);
+  background: var(--bg);
+  padding: .9rem 1rem calc(.9rem + env(safe-area-inset-bottom))
+}
+
+.tnow {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 3rem
+}
+
+.wave b {
+  flex: 1;
+  min-width: 2px;
+  background: var(--line);
+  border-radius: 3px;
+  transition: height .08s linear, background .2s
+}
+
+.rec-wave b.on {
+  background: var(--gold)
+}
+
+.rec-wave.live b.on {
+  background: var(--red)
+}
+
+.rec-dot {
+  width: .65rem;
+  height: .65rem;
+  border-radius: 50%;
+  background: var(--line);
+  flex: none
+}
+
+.rec-dot.live {
+  background: var(--red);
+  animation: pulse 1.1s infinite
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1
+  }
+
+  50% {
+    opacity: .25
+  }
+}
+
+.rec-main {
+  width: 4.4rem;
+  height: 4.4rem;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.8rem;
+  background: var(--gold);
+  color: #0B233F;
+  box-shadow: 0 6px 18px rgba(207, 158, 57, .4);
+  transition: transform .12s, background .2s
+}
+
+.rec-main:hover:not(:disabled) {
+  transform: translateY(-2px)
+}
+
+.rec-main:disabled {
+  background: var(--line);
+  color: var(--mute);
+  box-shadow: none
+}
+
+.rec-main.live {
+  background: var(--red);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(179, 38, 30, .4)
+}
+
+.rec-main.paused {
+  background: var(--ink);
+  color: var(--bg)
+}
+
+.rec-side {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 1.1rem
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * {
+    transition: none !important;
+    animation: none !important
+  }
+}
+
+/* ===== مودال اختيار PDF من المكتبة ===== */
+.pdf-card {
+  cursor: pointer;
+  transition: transform .12s, border-color .12s
+}
+
+.pdf-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold)
+}
+
+.pdf-card .icon-c {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  color: #0B233F;
+  flex: none;
+  font-size: 1.3rem
+}
+
+.pdf-card.sel {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(207, 158, 57, .25)
+}
+
+@media (max-width:575.98px) {
+  .rd-top .mute {
+    order: 5;
+    flex-basis: 100%;
+    text-align: center !important
+  }
+}
+
+#book {
+  --fb-bg: #e8e6dd;
+}

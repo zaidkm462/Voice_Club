@@ -1,0 +1,13 @@
+<aside class="app-sidebar" aria-label="تنقل المالك">
+    <a class="sidebar-brand" href="{{ url_for('owner.dashboard') }}">جرب صوتك</a>
+    <p class="role-badge">لوحة المالك</p>
+    <p>{{ g.user['full_name'] }}</p>
+    <nav class="d-grid gap-2" aria-label="صفحات المالك">
+        <a href="{{ url_for('owner.pages', section='admins') }}" data-section="admins" {% if active_section | default('') == 'admins' %}aria-current="page"{% endif %}><i class="bi bi-person-gear"></i><span>إدارة المشرفين</span></a>
+        <a href="{{ url_for('owner.pages', section='contestants') }}" data-section="contestants" {% if active_section | default('') == 'contestants' %}aria-current="page"{% endif %}><i class="bi bi-people"></i><span>المتسابقون</span></a>
+        <a href="{{ url_for('owner.pages', section='create') }}" data-section="create" {% if active_section | default('') == 'create' %}aria-current="page"{% endif %}><i class="bi bi-person-plus"></i><span>إضافة متسابق</span></a>
+        <a href="{{ url_for('owner.pages', section='pdfs') }}" data-section="pdfs" {% if active_section | default('') == 'pdfs' %}aria-current="page"{% endif %}><i class="bi bi-file-earmark-pdf"></i><span>مكتبة النصوص</span></a>
+        <a href="{{ url_for('owner.pages', section='messages') }}" data-section="messages" {% if active_section | default('') == 'messages' %}aria-current="page"{% endif %}><i class="bi bi-chat-left-text"></i><span>إرسال الرسائل</span></a>
+        <a href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-right"></i><span>تسجيل الدخول بحساب آخر</span></a>
+    </nav>
+</aside>

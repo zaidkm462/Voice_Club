@@ -1,0 +1,12 @@
+<aside class="app-sidebar" aria-label="تنقل المتسابق">
+    <a class="sidebar-brand" href="{{ url_for('user.dashboard') }}">جرب صوتك</a>
+    <p class="role-badge">لوحة المتسابق</p>
+    <p>{{ g.user['full_name'] }}</p>
+    <nav class="d-grid gap-2" aria-label="صفحات المتسابق">
+        <a href="{{ url_for('user.dashboard') }}" {% if active_section | default('') == 'home' %}aria-current="page"{% endif %}><i class="bi bi-house"></i><span>الرئيسية</span></a>
+        <a href="{{ url_for('user.pages', section='recs') }}" {% if active_section | default('') == 'recs' %}aria-current="page"{% endif %}><i class="bi bi-mic"></i><span>تسجيلاتي</span></a>
+        <a href="{{ url_for('user.pages', section='msgs') }}" {% if active_section | default('') == 'msgs' %}aria-current="page"{% endif %}><i class="bi bi-chat-left-text"></i><span>رسائلي</span></a>
+        <a href="{{ url_for('user.pdfs_page') }}" {% if request.endpoint == 'user.pdfs_page' %}aria-current="page"{% endif %}><i class="bi bi-file-earmark-pdf"></i><span>ملفاتي PDF</span></a>
+        <a href="{{ url_for('auth.login') }}"><i class="bi bi-box-arrow-right"></i><span>تسجيل الدخول بحساب آخر</span></a>
+    </nav>
+</aside>

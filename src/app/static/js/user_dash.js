@@ -11,8 +11,8 @@ const STATUS_INDEX = {
 };
 // حالات التسجيل الفردي (draft / review / approved / rejected)
 const ST = {
-    draft:    ['لم يُرسل', 's0'],
-    review:   ['جار المراجعة', 's1'],
+    draft: ['لم يُرسل', 's0'],
+    review: ['جار المراجعة', 's1'],
     approved: ['تمت الموافقة', 's2'],
     rejected: ['مرفوض', 's3']
 };
@@ -105,12 +105,13 @@ function stripExt(n) { return String(n || '').replace(/\.[^.]+$/, ''); }
 
 // تسجيل: [id, audio_path, pdf_path, duration_seconds, submitted, created_at]
 function normalizeRecording(row) {
-    const id    = row[0];
-    const audio = row[1] || '';
-    const pdf   = row[2] || '';
-    const dur   = +row[3] || 0;
-    const sub   = row[4];
-    const date  = String(row[5] || '').slice(0, 10);
+    const id = row[0];
+    const audio = window.location.origin + '/' + row[1] || '';
+    const pdf = row[2] || '';
+    const dur = +row[3] || 0;
+    const sub = row[4];
+    const date = String(row[5] || '').slice(0, 10);
+    const title = String(row[6] || '');
 
     // submitted: 0 = لم يُرسل | 1 = جار المراجعة | 2 = تمت الموافقة | 3 = مرفوض
     let status = 'draft';
@@ -118,8 +119,6 @@ function normalizeRecording(row) {
     else if (sub === 2) status = 'approved';
     else if (sub === 3) status = 'rejected';
 
-    // لا يوجد عمود title في الاستعلام → نستخرج الاسم من ملف PDF ثم الصوت
-    const title = stripExt(basename(pdf)) || stripExt(basename(audio)) || 'تسجيل';
 
     return { id, title, date, dur, status, audio, pdf };
 }
@@ -127,12 +126,12 @@ function normalizeRecording(row) {
 // رسالة: [id, title, content, is_read, created_at]
 function normalizeMessage(row) {
     return {
-        id:     row[0],
-        from:   'فريق جرب صوتك',       // لا يُرجعه الاستعلام حالياً
-        title:  row[1] || '',
-        body:   row[2] || '',
+        id: row[0],
+        from: 'فريق جرب صوتك',       // لا يُرجعه الاستعلام حالياً
+        title: row[1] || '',
+        body: row[2] || '',
         unread: !(row[3] === 1),
-        time:   relTime(row[4])
+        time: relTime(row[4])
     };
 }
 
@@ -175,7 +174,7 @@ function renderList() {
     $('list').innerHTML = recs.length ? recs.map(r => `
     <div class="col"><article class="card h-100"><div class="card-body d-flex flex-column gap-3 p-4">
       <div class="d-flex justify-content-between align-items-start gap-2">
-        <h3 class="fs-5 fw-bolder mb-0">${r.title}</h3>
+        <h3 class="fs-5 fw-bolder mb-0" style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${r.title}</h3>
         <span class="pill ${(ST[r.status] || ST.draft)[1]}"><i></i>${(ST[r.status] || ST.draft)[0]}</span>
       </div>
       <div class="mute d-flex gap-3">
@@ -197,10 +196,10 @@ async function submit_record(id) {
         const res = await fetch("/api/recordings/submit", {
             method: 'POST',
             credentials: 'same-origin',
-            body: JSON.stringify({"record_id": id}),
-            headers: { "Content-Type": "application/json"}
+            body: JSON.stringify({ "record_id": id }),
+            headers: { "Content-Type": "application/json" }
         });
-        if (!res.ok) {toast('تعذر ارسال التسجيل'); return;}
+        if (!res.ok) { toast('تعذر ارسال التسجيل'); return; }
         loadData(true);
     } catch (err) {
         console.error('loadData failed:', err);
@@ -214,7 +213,7 @@ $('list').addEventListener('click', e => {
     const id = +b.parentElement.dataset.id, r = recs.find(x => x.id === id);
     if (!r) return;
     if (b.dataset.a === 'play') openReader(r);                       // ← فتح القارئ
-    if (b.dataset.a === 'send') { r.status = 'review'; refresh(); toast('تم إرسال التسجيل للمراجعة');submit_record(r.id); }
+    if (b.dataset.a === 'send') { r.status = 'review'; refresh(); toast('تم إرسال التسجيل للمراجعة'); submit_record(r.id); }
     if (b.dataset.a === 'del') { target = r; $('delName').textContent = r.title; M.del.show(); }
 });
 $('delOk').onclick = () => { recs = recs.filter(r => r !== target); M.del.hide(); refresh(); toast('تم حذف التسجيل'); };
@@ -256,7 +255,8 @@ function play() {
     ensureAudio();
     if (!audioEl) return;
     audioEl.play().then(() => { playing = true; upd(); }).catch(err => {
-        console.error(err);
+        console.error('Audio Error Details:', audioEl.error);
+        console.log("رابط الصوت الحالي:", cur.audio);
         toast('تعذر تشغيل الملف الصوتي');
     });
 }
@@ -267,7 +267,7 @@ function pause() {
 function stop() {
     if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; }
     t = 0; playing = false; upd();
-    if (book) try { book.goTo(1); } catch (e) {}
+    if (book) try { book.goTo(1); } catch (e) { }
 }
 function seek(f) {
     if (!cur) return;
@@ -292,8 +292,10 @@ async function loadBook(r, my) {
             controls: true,
             displayMode: 'auto',
             shadow: 'fullscreen',
+            rtl: true,
+            spine: true,
             // نسخة UMD من pdf.js (تعمل كسكربت عادي)
-            pdfjsSrc:     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+            pdfjsSrc: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
             pdfWorkerSrc: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
         });
 
@@ -338,9 +340,9 @@ function openReader(r) {
 
     // تعطيل أزرار التنزيل إذا لم يوجد ملف
     const dlAudio = document.querySelector('#reader .bi-file-earmark-music')?.closest('button');
-    const dlPdf   = document.querySelector('#reader .bi-filetype-pdf')?.closest('button');
+    const dlPdf = document.querySelector('#reader .bi-filetype-pdf')?.closest('button');
     if (dlAudio) dlAudio.disabled = !r.audio;
-    if (dlPdf)   dlPdf.disabled   = !r.pdf;
+    if (dlPdf) dlPdf.disabled = !r.pdf;
 
     // إزالة خلفية rdLoad الافتراضية (aqua)
     const rdl = $('rdLoad'); if (rdl) rdl.style.backgroundColor = '';
@@ -351,8 +353,8 @@ function openReader(r) {
 
 function closeReader() {
     token++; pause();
-    if (audioEl) { try { audioEl.pause(); } catch (e) {} audioEl.src = ''; audioEl = null; }
-    try { book && book.destroy && book.destroy(); } catch (e) {}
+    if (audioEl) { try { audioEl.pause(); } catch (e) { } audioEl.src = ''; audioEl = null; }
+    try { book && book.destroy && book.destroy(); } catch (e) { }
     book = null; $('stage').innerHTML = '';
     document.body.classList.remove('reading'); scrollTo(0, scrollY0);
 }
@@ -399,7 +401,7 @@ document.addEventListener('keydown', e => {
     if (!document.body.classList.contains('reading')) return;
     if (e.key === 'Escape') closeReader();
     else if (e.code === 'Space' && !/BUTTON|A/.test(e.target.tagName)) { e.preventDefault(); playing ? pause() : play(); }
-    else if (e.key === 'ArrowLeft')  book && book.prev();
+    else if (e.key === 'ArrowLeft') book && book.prev();
     else if (e.key === 'ArrowRight') book && book.next();
 });
 
@@ -419,7 +421,7 @@ function renderMsgs() {
         ${m.unread ? `<button class="btn btn-line btn-sm" data-read="${m.id}"><i class="bi bi-check2"></i> تحديد كمقروءة</button>` : ''}
       </div>
     </div></article></div>`).join('')
-    : `<div class="col-12"><div class="card"><div class="card-body text-center p-5"><i class="bi bi-envelope-open fs-1 mute"></i><p class="fs-5 mb-0">لا توجد رسائل.</p></div></div></div>`;
+        : `<div class="col-12"><div class="card"><div class="card-body text-center p-5"><i class="bi bi-envelope-open fs-1 mute"></i><p class="fs-5 mb-0">لا توجد رسائل.</p></div></div></div>`;
 }
 $('mlist').addEventListener('click', e => {
     const b = e.target.closest('[data-read]'); if (!b) return;
@@ -458,7 +460,7 @@ document.addEventListener('click', e => {
     if (g === 'recs' || g === 'msgs') openSection(g);
     else if (g === 'home') scrollTo({ top: 0, behavior: 'smooth' });
     else if (ROUTES[g] && ROUTES[g] !== '#') location.href = ROUTES[g];
-    else toast('هنا تنتقل إلى صفحة التسجيل');
+    else { window.location.href = "/user/record"; }
 });
 
 /* ============ الإقلاع ============ */

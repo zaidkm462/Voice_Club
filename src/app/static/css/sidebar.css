@@ -1,0 +1,66 @@
+:root {
+    --sidebar-bg: #fffdf7;
+    --sidebar-ink: #0B233F;
+    --sidebar-line: #C7C3B7;
+    --sidebar-gold: #CF9E39;
+    --sidebar-muted: #5F6A76;
+}
+
+.with-sidebar { background: #F9F5E9; }
+.app-sidebar {
+    background: var(--sidebar-bg);
+    color: var(--sidebar-ink);
+    border-inline-end: 1px solid var(--sidebar-line);
+    padding: 1.5rem;
+    box-shadow: 0 0 1.5rem rgba(11, 35, 63, .06);
+}
+.app-sidebar a {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    color: var(--sidebar-ink);
+    text-decoration: none;
+    padding: .7rem .8rem;
+    border-radius: 14px;
+    transition: background-color .15s, color .15s;
+}
+.app-sidebar a:hover,
+.app-sidebar a[aria-current="page"] {
+    background: var(--sidebar-ink);
+    color: #fff;
+}
+.app-sidebar a:focus-visible {
+    outline: 3px solid var(--sidebar-gold);
+    outline-offset: 2px;
+}
+.app-sidebar .sidebar-brand {
+    font-size: 1.6rem;
+    font-weight: bold;
+    padding-inline: 0;
+}
+.app-sidebar .sidebar-brand:hover {
+    background: transparent;
+    color: var(--sidebar-ink);
+}
+.app-sidebar .role-badge {
+    display: inline-block;
+    background: #F4E7C8;
+    color: #493913;
+    padding: .35rem .7rem;
+    border-radius: 99px;
+}
+.app-sidebar > p:not(.role-badge) {
+    color: var(--sidebar-muted);
+}
+.app-sidebar .bi {
+    font-size: 1.1rem;
+    width: 1.3rem;
+    text-align: center;
+}
+@media (min-width: 992px) {
+    .with-sidebar { padding-inline-start: 260px; }
+    .app-sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; width: 260px; overflow-y: auto; z-index: 1020; }
+}
+@media (max-width: 991px) {
+    .app-sidebar nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

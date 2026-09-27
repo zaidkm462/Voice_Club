@@ -13,8 +13,20 @@
  *   book.setDisplayMode('single'|'double'|'auto');
  *   book.toggleFullscreen(); book.destroy();
  *
+ * Arabic / right-to-left books:
+ *   PDFlipbook.create(el, { url: 'diwan.pdf', rtl: true })
+ *   The whole book opens and turns right-to-left — flipping in from the
+ *   left edge brings the next page, matching how a printed Arabic book is
+ *   held and turned. Everything else (arrows, keyboard, drag, corner-fold,
+ *   fullscreen, zoom) keeps working, just mirrored.
+ *
  * Theming via CSS variables on the container:
  *   --fb-bg, --fb-paper, --fb-control-bg, --fb-control-fg, --fb-counter-fg
+ *   (--fb-bg defaults to a dark theatre backdrop, not white, so the page
+ *   canvas itself reads as a distinct "paper" against the surrounding UI)
+ *
+ * opts.spine (default true) draws a permanent shadow + hairline down the
+ * centre of a two-page spread, so it reads as a bound book even at rest.
  */
 (function (global) {
   'use strict';
@@ -33,9 +45,14 @@
   var CSS = [
     '.fb-root{position:relative;width:100%;height:100%;min-height:240px;display:flex;',
     '  align-items:center;justify-content:center;overflow:hidden;outline:none;',
-    '  background:var(--fb-bg,transparent);-webkit-user-select:none;user-select:none;',
+    '  background:var(--fb-bg,radial-gradient(ellipse at center,#22252c 0%,#15171c 100%));',
+    '  -webkit-user-select:none;user-select:none;',
     '  touch-action:pan-y;font-family:inherit}',
-    '.fb-root *,.fb-root *::before,.fb-root *::after{box-sizing:border-box}',
+    /* every internal box is metric-isolated from the host page: a fixed */
+    /* box-sizing/writing-mode regardless of what Bootstrap (or bootstrap.rtl) */
+    /* sets on <html>/<body> — this is what "leaks" and breaks the flip math */
+    '.fb-root,.fb-root *,.fb-root *::before,.fb-root *::after{',
+    '  box-sizing:border-box;direction:ltr;unicode-bidi:isolate;writing-mode:horizontal-tb}',
 
     /* fallback fullscreen for browsers without the Fullscreen API (iPhone) */
     '.fb-fake-fs{position:fixed!important;inset:0!important;width:auto!important;',
@@ -46,6 +63,13 @@
     '.fb-stage{position:relative;perspective:2600px;transition:transform .55s cubic-bezier(.4,.1,.2,1)}',
     '.fb-stage.fb-live{transition:none}',
     '.fb-book{position:relative;transform-style:preserve-3d}',
+    /* right-to-left mode: mirror the whole book. Every offset inside it */
+    /* (hot zones, spine, shadows, fold clip-paths) is computed in local */
+    /* left-to-right coordinates, so one mirror on the parent is enough to */
+    /* turn "flip toward the left reveals the next page" for free — the */
+    /* actual page bitmaps are counter-mirrored at render time so they stay */
+    /* readable (see _renderPage / PDFlipbook.opts.rtl in the JS). */
+    '.fb-rtl .fb-book{transform:scaleX(-1)}',
 
     /* drop shadow under the visible book footprint */
     '.fb-bookshadow{position:absolute;top:0;height:100%;z-index:0;pointer-events:none;',
@@ -93,6 +117,16 @@
     /* crease shading must follow it rather than stopping at the book edge */
     '.fb-fold-shade{position:absolute;left:-100%;top:-100%;width:300%;height:300%;',
     '  pointer-events:none}',
+
+    /* permanent binding crease down the middle of a spread — independent of */
+    /* the flip animation, so two resting pages always read as one bound book */
+    '.fb-spine{position:absolute;top:0;left:50%;width:34px;height:100%;',
+    '  transform:translateX(-50%);pointer-events:none;z-index:40;',
+    '  background:linear-gradient(to right,rgba(0,0,0,0) 0%,rgba(0,0,0,.20) 42%,',
+    '  rgba(0,0,0,.32) 50%,rgba(0,0,0,.20) 58%,rgba(0,0,0,0) 100%)}',
+    '.fb-spine::after{content:"";position:absolute;top:0;left:50%;width:1px;height:100%;',
+    '  transform:translateX(-50%);background:rgba(0,0,0,.42)}',
+    '.fb-single-mode .fb-spine{display:none}',
 
     /* single-page mode: one standalone page; spread machinery hidden */
     '.fb-spane{position:absolute;inset:0;display:none}',
@@ -301,6 +335,9 @@
       cornerFold: true,     // corner drags fold the paper along a crease
       shadow: 'fullscreen', // 'none' | 'normal' | 'fullscreen' | 'always' (true/false ok)
       displayMode: 'auto',  // 'auto' | 'double' | 'single'
+      rtl: false,           // true = Arabic-style book: opens/turns right-to-left,
+                             // flipping from the left edge brings the next page
+      spine: true,          // permanent shadow/line down the middle of a spread
       zoomSteps: [1, 1.5, 2, 3],
       pageNumbers: true,
       arrows: true,
@@ -354,9 +391,11 @@
     injectStyles();
     var c = this.container;
     c.classList.add('fb-root');
+    c.classList.toggle('fb-rtl', !!this.opts.rtl);
     c.setAttribute('tabindex', '0');
     c.setAttribute('role', 'region');
     c.setAttribute('aria-label', 'PDF flipbook');
+    c.setAttribute('dir', 'ltr'); // internal layout is always authored LTR; see .fb-rtl mirror
 
     this.stage = document.createElement('div');
     this.stage.className = 'fb-stage';
@@ -368,6 +407,12 @@
     this.shadowEl = document.createElement('div');
     this.shadowEl.className = 'fb-bookshadow';
     this.book.appendChild(this.shadowEl);
+
+    if (this.opts.spine) {
+      this.spineEl = document.createElement('div');
+      this.spineEl.className = 'fb-spine';
+      this.book.appendChild(this.spineEl);
+    }
 
     this.castFwd = document.createElement('div');
     this.castFwd.className = 'fb-cast fb-cast-fwd';
@@ -471,6 +516,7 @@
       var vp = page.getViewport({ scale: 1 });
       self.aspect = vp.height / vp.width;
       self._buildSheets();
+      if (self.spineEl) self.spineEl.style.zIndex = self.numSheets + 3;
       self.status.remove();
       self.viewPage = clamp(self.opts.startPage, 1, self.numPages);
       self.current = self._sheetForPage(self.viewPage);
@@ -733,9 +779,23 @@
 
       canvas.width = targetW;
       canvas.height = Math.round(self.pageH * eff);
+      // some hosts (e.g. Bootstrap's RTL build on an <html dir="rtl"> page)
+      // set an inherited text-direction context that pdf.js's canvas text
+      // renderer picks up, which re-flows/overlaps every glyph run — force
+      // it back to ltr regardless of the host page.
+      canvas.setAttribute('dir', 'ltr');
+      canvas.style.direction = 'ltr';
       var ctx = canvas.getContext('2d');
+      if ('direction' in ctx) ctx.direction = 'ltr';
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+      if (self.opts.rtl) {
+        // the whole book is mirrored via CSS for the rtl flip direction;
+        // pre-mirror the bitmap here so the mirrored book still shows
+        // right-reading pages instead of backwards text/art.
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       var ox = (canvas.width - vp.width) / 2;
       var oy = (canvas.height - vp.height) / 2;
       ctx.translate(ox, oy);
@@ -1158,7 +1218,7 @@
       // swap the base page to the freshly-landed one BEFORE removing the
       // rig, so the handoff is pixel-seamless
       copyCanvas(f.dir === 'fwd' ? this.nextC : this.prevC,
-                 this.baseC, this.pageW, this.pageH);
+        this.baseC, this.pageW, this.pageH);
       this.viewPage = clamp(this.viewPage + (f.dir === 'fwd' ? 1 : -1), 1, this.numPages);
       this.current = this._sheetForPage(this.viewPage);
       this._applyResting();
@@ -1205,8 +1265,10 @@
     this.container.addEventListener('pointercancel', this._onRootUp, true);
 
     this._onKey = function (e) {
-      if (e.key === 'ArrowRight') { e.preventDefault(); self.next(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); self.prev(); }
+      var fwdKey = self.opts.rtl ? 'ArrowLeft' : 'ArrowRight';
+      var backKey = self.opts.rtl ? 'ArrowRight' : 'ArrowLeft';
+      if (e.key === fwdKey) { e.preventDefault(); self.next(); }
+      else if (e.key === backKey) { e.preventDefault(); self.prev(); }
       else if (e.key === '+' || e.key === '=') { self.zoomIn(); }
       else if (e.key === '-') { self.zoomOut(); }
       else if (e.key === 'f' || e.key === 'F') { self.toggleFullscreen(); }
@@ -1219,10 +1281,20 @@
     document.addEventListener('webkitfullscreenchange', this._onFsChange);
 
     if (this.btnNext) {
+      // btnPrev/btnNext are named for their fixed screen position (left/right),
+      // not for what they do — in rtl the left-hand button is the one that
+      // advances (flipping in from the left brings the next page)
+      var leftBtn = this.btnPrev, rightBtn = this.btnNext;
+      var advanceBtn = this.opts.rtl ? leftBtn : rightBtn;
+      var backBtn = this.opts.rtl ? rightBtn : leftBtn;
+      advanceBtn.setAttribute('aria-label', 'Next page');
+      advanceBtn.title = 'Next page';
+      backBtn.setAttribute('aria-label', 'Previous page');
+      backBtn.title = 'Previous page';
       this._onNext = function () { self.next(); };
       this._onPrev = function () { self.prev(); };
-      this.btnNext.addEventListener('click', this._onNext);
-      this.btnPrev.addEventListener('click', this._onPrev);
+      advanceBtn.addEventListener('click', this._onNext);
+      backBtn.addEventListener('click', this._onPrev);
     }
     if (this.btnFs) {
       this.btnFs.addEventListener('click', function () { self.toggleFullscreen(); });
@@ -1279,9 +1351,10 @@
       ? corner > 0
       : e.clientY > rect.top + rect.height / 2;
 
+    var mxStart = this._mxc(e.clientX, rect);
     this.drag = {
       dir: dir, k: k, id: e.pointerId, mode: mode, rect: rect, scale: scale,
-      startX: e.clientX, lastX: e.clientX,
+      startX: mxStart, lastX: mxStart,
       lastT: performance.now(), vx: 0,
       moved: false, zone: e.currentTarget
     };
@@ -1289,12 +1362,21 @@
     if (!single) this._beginShadowLerp(dir);
     if (mode === 'fold') {
       this._foldStart(dir, k, bottom);
-      this._foldRender(this._toLocalU(e.clientX), (e.clientY - rect.top) / scale);
+      this._foldRender(this._toLocalU(mxStart), (e.clientY - rect.top) / scale);
     }
 
     e.currentTarget.addEventListener('pointermove', this._onMove);
     e.currentTarget.addEventListener('pointerup', this._onUp);
     e.currentTarget.addEventListener('pointercancel', this._onUp);
+  };
+
+  // the flip/fold math below is all written in the book's own left-to-right
+  // coordinate space (the same space .fb-book is authored in); in rtl mode
+  // that space is mirrored on screen via CSS (transform:scaleX(-1)), so any
+  // real screen clientX has to be reflected back through the drag rect
+  // before it means anything to that math.
+  PDFlipbook.prototype._mxc = function (clientX, rect) {
+    return this.opts.rtl ? (rect.left + rect.right - clientX) : clientX;
   };
 
   PDFlipbook.prototype._toLocalU = function (clientX) {
@@ -1306,17 +1388,18 @@
   PDFlipbook.prototype._pointerMove = function (e) {
     var d = this.drag;
     if (!d || e.pointerId !== d.id) return;
+    var mx = this._mxc(e.clientX, d.rect);
     var now = performance.now();
     var dt = now - d.lastT;
-    if (dt > 0) d.vx = (e.clientX - d.lastX) / dt;
-    d.lastX = e.clientX;
+    if (dt > 0) d.vx = (mx - d.lastX) / dt;
+    d.lastX = mx;
     d.lastT = now;
 
-    var dx = (e.clientX - d.startX) / d.scale;
-    if (Math.abs(e.clientX - d.startX) > 6) d.moved = true;
+    var dx = (mx - d.startX) / d.scale;
+    if (Math.abs(mx - d.startX) > 6) d.moved = true;
 
     if (d.mode === 'fold') {
-      this._foldRender(this._toLocalU(e.clientX), (e.clientY - d.rect.top) / d.scale);
+      this._foldRender(this._toLocalU(mx), (e.clientY - d.rect.top) / d.scale);
       d.p = this._foldProgress();
       return;
     }
@@ -1416,7 +1499,7 @@
       this.stage.classList.add('fb-live');
       // capture so a mouse-up released outside the container still reaches us
       // (otherwise pan state and the fb-live class get stuck)
-      try { this.container.setPointerCapture(e.pointerId); } catch (e2) {}
+      try { this.container.setPointerCapture(e.pointerId); } catch (e2) { }
       e.preventDefault();
     }
   };
@@ -1483,7 +1566,7 @@
       var exit = document.exitFullscreen || document.webkitExitFullscreen;
       if (exit) {
         var ep = exit.call(document);
-        if (ep && ep.catch) ep.catch(function () {});
+        if (ep && ep.catch) ep.catch(function () { });
       }
       return;
     }
@@ -1578,7 +1661,7 @@
         this.shadowEl.style.width = this.pageW + 'px';
       } else {
         this._setShadowExtents(this.current > 0 ? 1 : 0,
-                               this.current < this.numSheets ? 1 : 0);
+          this.current < this.numSheets ? 1 : 0);
       }
     }
     this.shadowEl.style.opacity = on ? 1 : 0;
@@ -1598,8 +1681,9 @@
     }
 
     if (this.btnPrev) {
-      this.btnPrev.disabled = atStart;
-      this.btnNext.disabled = atEnd;
+      var backDisabled = atStart, advanceDisabled = atEnd;
+      if (this.opts.rtl) { this.btnPrev.disabled = advanceDisabled; this.btnNext.disabled = backDisabled; }
+      else { this.btnPrev.disabled = backDisabled; this.btnNext.disabled = advanceDisabled; }
     }
     this.hotL.hidden = atStart || zoomed;
     this.hotR.hidden = atEnd || zoomed;
@@ -1626,7 +1710,7 @@
         var left = this.current * 2;
         var right = left + 1;
         label = right <= this.numPages ? left + '–' + right + ' / ' + this.numPages
-                                       : left + ' / ' + this.numPages;
+          : left + ' / ' + this.numPages;
       }
       this.counter.textContent = label;
     }
@@ -1649,7 +1733,7 @@
     if (this.pdf) {
       try {
         var dp = this.pdf.destroy();
-        if (dp && dp.catch) dp.catch(function () {});
+        if (dp && dp.catch) dp.catch(function () { });
       } catch (e) { /* already torn down */ }
       this.pdf = null;
     }
@@ -1661,7 +1745,7 @@
     this.container.removeEventListener('pointermove', this._onRootMove, true);
     this.container.removeEventListener('pointerup', this._onRootUp, true);
     this.container.removeEventListener('pointercancel', this._onRootUp, true);
-    this.container.classList.remove('fb-root');
+    this.container.classList.remove('fb-root', 'fb-rtl');
     this.container.innerHTML = '';
     // drop the auto-init guard so the element can be re-initialised later
     if (this.container.__pdflipbook === this) {
@@ -1688,6 +1772,8 @@
         startPage: parseInt(el.getAttribute('data-start-page') || '1', 10),
         displayMode: el.getAttribute('data-display-mode') || 'auto',
         shadow: el.getAttribute('data-shadow') || 'fullscreen',
+        rtl: el.getAttribute('data-rtl') === 'true',
+        spine: el.getAttribute('data-spine') !== 'false',
         pageNumbers: el.getAttribute('data-page-numbers') !== 'false',
         arrows: el.getAttribute('data-arrows') !== 'false',
         controls: el.getAttribute('data-controls') !== 'false'
