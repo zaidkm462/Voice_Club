@@ -106,18 +106,19 @@ function stripExt(n) { return String(n || '').replace(/\.[^.]+$/, ''); }
 // تسجيل: [id, audio_path, pdf_path, duration_seconds, submitted, created_at]
 function normalizeRecording(row) {
     const id = row[0];
-    const audio = window.location.origin + '/' + row[1] || '';
+    const audio = row[1] ? '/' + String(row[1]).replace(/^\/+/, '') : '';
     const pdf = row[2] || '';
     const dur = +row[3] || 0;
     const sub = row[4];
     const date = String(row[5] || '').slice(0, 10);
     const title = String(row[6] || '');
 
-    // submitted: 0 = لم يُرسل | 1 = جار المراجعة | 2 = تمت الموافقة | 3 = مرفوض
+    // submitted is boolean; the account status holds the review decision.
     let status = 'draft';
-    if (sub === 1) status = 'review';
-    else if (sub === 2) status = 'approved';
-    else if (sub === 3) status = 'rejected';
+    if (sub === 1) {
+        status = USER_STATUS === 'تمت الموافقة' ? 'approved'
+            : USER_STATUS === 'مرفوض' ? 'rejected' : 'review';
+    }
 
 
     return { id, title, date, dur, status, audio, pdf };
@@ -191,7 +192,11 @@ function renderList() {
         : `<div class="col-12"><div class="card"><div class="card-body text-center p-5"><i class="bi bi-mic fs-1 mute"></i><p class="fs-5 mb-3">لا توجد تسجيلات بعد.</p><a href="#" data-go="new" class="btn btn-gold">سجّل صوتك الآن</a></div></div></div>`;
 }
 
-async function submit_record(id) {
+let submissionBusy = false;
+async function submit_record(id, button) {
+    if (submissionBusy) return;
+    submissionBusy = true;
+    button.disabled = true;
     try {
         const res = await fetch("/api/recordings/submit", {
             method: 'POST',
@@ -199,11 +204,21 @@ async function submit_record(id) {
             body: JSON.stringify({ "record_id": id }),
             headers: { "Content-Type": "application/json" }
         });
-        if (!res.ok) { toast('تعذر ارسال التسجيل'); return; }
-        loadData(true);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'تعذر إرسال التسجيل');
+        if (data.submitted !== true || data.recording_id !== id) {
+            throw new Error('تعذر تأكيد الإرسال. حدّث الصفحة للتحقق.');
+        }
+        const refreshed = await loadData(true);
+        toast(refreshed ? 'تم إرسال التسجيل للمراجعة'
+            : 'تم الإرسال، لكن تعذر تحديث القائمة. حدّث الصفحة.');
     } catch (err) {
-        console.error('loadData failed:', err);
-        toast('تعذر ارسال التسجيل');
+        console.error('Submission failed:', err);
+        toast(err instanceof TypeError || err instanceof SyntaxError
+            ? 'تعذر تأكيد الإرسال. حدّث الصفحة قبل المحاولة مرة أخرى.' : err.message);
+    } finally {
+        submissionBusy = false;
+        button.disabled = false;
     }
 }
 
@@ -213,7 +228,7 @@ $('list').addEventListener('click', e => {
     const id = +b.parentElement.dataset.id, r = recs.find(x => x.id === id);
     if (!r) return;
     if (b.dataset.a === 'play') openReader(r);                       // ← فتح القارئ
-    if (b.dataset.a === 'send') { r.status = 'review'; refresh(); toast('تم إرسال التسجيل للمراجعة'); submit_record(r.id); }
+    if (b.dataset.a === 'send' && r.status === 'draft') submit_record(r.id, b);
     if (b.dataset.a === 'del') { target = r; $('delName').textContent = r.title; M.del.show(); }
 });
 $('delOk').onclick = () => { recs = recs.filter(r => r !== target); M.del.hide(); refresh(); toast('تم حذف التسجيل'); };

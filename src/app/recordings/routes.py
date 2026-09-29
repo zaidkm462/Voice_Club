@@ -2,7 +2,7 @@ import os
 import time
 import traceback
 
-from flask import Blueprint, jsonify, render_template, request, g
+from flask import Blueprint, jsonify, render_template, request, g, current_app
 
 from app.decorators import admin_required, login_required
 import app.db as db
@@ -16,14 +16,33 @@ recordings_bp = Blueprint(
 @recordings_bp.route("/api/recordings/submit", methods=["POST"])
 @login_required
 def submit():
+    if g.user["role"] != "user":
+        return jsonify(error="forbidden", message="Only contestants can submit auditions."), 403
+    if not request.is_json:
+        return jsonify(error="invalid_content_type", message="Send a JSON request."), 415
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or type(data.get("record_id")) is not int or data["record_id"] <= 0:
+        return jsonify(error="invalid_record_id", message="A positive integer record_id is required."), 400
     uid = g.user['id']
-    rec_id = request.json["record_id"]
+    rec_id = data["record_id"]
     try:
-        r = db.submit_record(uid, rec_id)
-        if not r: return jsonify({}, 400)
-        return jsonify({}, 200)
+        db.submit_record(uid, rec_id)
+        return jsonify(ok=True, recording_id=rec_id, submitted=True), 200
+    except ValueError as error:
+        errors = {
+            "forbidden": (403, "Only contestants can submit auditions."),
+            "not_found": (404, "Recording not found."),
+            "missing_audio": (409, "The audio file is missing or empty."),
+            "already_submitted": (409, "Another audition has already been submitted."),
+        }
+        code = str(error)
+        if code not in errors:
+            raise
+        status, message = errors[code]
+        return jsonify(error=code, message=message), status
     except Exception:
-        return jsonify({}, 400)
+        current_app.logger.exception("Audition submission failed")
+        return jsonify(error="submission_failed", message="Unable to submit the audition."), 500
 
 @recordings_bp.route("/api/recordings/delete", methods=["POST"])
 @login_required

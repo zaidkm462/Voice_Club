@@ -1,11 +1,8 @@
 import sqlite3
-from pathlib import Path, PurePosixPath
-
-import config
 
 from flask import g
 
-from config import DATABASE
+from  src.config import DATABASE
 
 
 def get_db_test():
@@ -60,7 +57,7 @@ def get_recordings(uid):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""SELECT recordings.id, recordings.path, pdfs.path, duration_seconds,
-                        submitted, recordings.created_at, pdfs.name FROM recordings INNER JOIN pdfs
+                        submitted, recordings.created_at FROM recordings INNER JOIN pdfs
                         ON recordings.pdf_id = pdfs.id where recordings.user_id=?;""", (uid,))
     x = cur.fetchall()
     return [tuple(i) for i in x]
@@ -156,6 +153,50 @@ def get_user_account(user_id):
         return None
 
     return dict(row)
+
+
+def get_owned_recording(user_id, recording_id):
+    row = get_db().execute(
+        """
+        SELECT recordings.id, recordings.path, recordings.submitted
+        FROM recordings JOIN pdfs ON pdfs.id = recordings.pdf_id
+        WHERE recordings.id = ? AND recordings.user_id = ?
+          AND (pdfs.owner_user_id IS NULL OR pdfs.owner_user_id = ?)
+        """, (recording_id, user_id, user_id),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def submit_user_recording(user_id, recording_id):
+    connection = get_db()
+    with connection:
+        # Serialize submissions so two tabs cannot submit different drafts together.
+        connection.execute("BEGIN IMMEDIATE")
+        account = connection.execute(
+            "SELECT role FROM accounts WHERE id = ?", (user_id,),
+        ).fetchone()
+        if account is None or account["role"] != "user":
+            return "forbidden"
+        recording = get_owned_recording(user_id, recording_id)
+        if recording is None:
+            return "not_found"
+        if recording["submitted"] == 1:
+            # A retry must not reset an existing admin decision.
+            return "submitted"
+        existing = connection.execute(
+            "SELECT id FROM recordings WHERE user_id = ? AND submitted = 1",
+            (user_id,),
+        ).fetchone()
+        if existing is not None:
+            return "conflict"
+        connection.execute(
+            "UPDATE recordings SET submitted = 1 WHERE id = ? AND user_id = ?",
+            (recording_id, user_id),
+        )
+        connection.execute(
+            "UPDATE accounts SET status = 'pending' WHERE id = ?", (user_id,),
+        )
+    return "submitted"
 
 
 def get_submitted_recording(user_id):
@@ -467,110 +508,3 @@ def delete_user_account(user_id, confirmed_username):
         "deleted_user_id": user_id,
         "file_cleanup_candidates": unreferenced_paths,
     }
-
-
-def submit_record(uid, record_id):
-    connection = get_db()
-    with connection:
-        # Serialize submissions and preserve an existing review decision.
-        connection.execute("BEGIN IMMEDIATE")
-        account = connection.execute(
-            "SELECT role FROM accounts WHERE id = ?", (uid,)
-        ).fetchone()
-        if account is None or account["role"] != "user":
-            raise ValueError("forbidden")
-        row = connection.execute(
-            """SELECT recordings.path, recordings.submitted
-               FROM recordings JOIN pdfs ON pdfs.id = recordings.pdf_id
-               WHERE recordings.id = ? AND recordings.user_id = ?
-                 AND (pdfs.owner_user_id IS NULL OR pdfs.owner_user_id = ?)""",
-            (record_id, uid, uid),
-        ).fetchone()
-        if row is None:
-            raise ValueError("not_found")
-        stored_path = row["path"]
-        if not isinstance(stored_path, str):
-            raise ValueError("missing_audio")
-        relative = stored_path.removeprefix("/storage/")
-        parts = PurePosixPath(relative)
-        if (len(parts.parts) != 2 or parts.parts[0] != "recordings"
-                or str(parts) != relative or ".." in parts.parts
-                or "\\" in relative or ":" in relative):
-            raise ValueError("missing_audio")
-        try:
-            root = Path(config.STORAGE_DIR).resolve()
-            audio = (root / relative).resolve()
-            if not audio.is_relative_to(root) or not audio.is_file() or audio.stat().st_size == 0:
-                raise ValueError("missing_audio")
-        except OSError:
-            raise ValueError("missing_audio") from None
-        if row["submitted"] == 1:
-            return True
-        if connection.execute(
-            "SELECT 1 FROM recordings WHERE user_id = ? AND submitted = 1", (uid,)
-        ).fetchone():
-            raise ValueError("already_submitted")
-        connection.execute(
-            "UPDATE recordings SET submitted = 1 WHERE id = ? AND user_id = ?", (record_id, uid)
-        )
-        connection.execute(
-            "UPDATE accounts SET status = 'pending' WHERE id = ?", (uid,)
-        )
-    return True
-
-
-def delete_record(uid, record_id):
-    if not record_id:
-        return False
-
-    connection = get_db()
-    row = connection.execute(
-        "SELECT user_id, submitted FROM recordings WHERE id = ?", (record_id,)
-    ).fetchone()
-    if row is None or row["user_id"] != uid or row["submitted"] == 1:
-        return False
-
-    with connection:
-        connection.execute("DELETE FROM recordings WHERE id = ?", (record_id,))
-    return True
-
-
-def get_pdfs():
-    rows = get_db().execute(
-        "SELECT id, name, path FROM pdfs ORDER BY id DESC"
-    ).fetchall()
-    return [
-        {"pdf_id": row["id"], "name": row["name"], "url": row["path"]}
-        for row in rows if row["name"] and row["path"]
-    ]
-
-
-def add_pdf(name, path):
-    connection = get_db()
-    owner_user_id = g.user["id"] if g.user["role"] == "user" else None
-    with connection:
-        cursor = connection.execute(
-            "INSERT INTO pdfs (name, path, owner_user_id) VALUES (?, ?, ?)",
-            (name, path, owner_user_id),
-        )
-    return cursor.lastrowid
-
-
-def check_pdf_id(pdf_id):
-    return get_db().execute(
-        "SELECT 1 FROM pdfs WHERE id = ?", (pdf_id,)
-    ).fetchone() is not None
-
-
-def add_record(uid, pdf_id, rel, duration):
-    connection = get_db()
-    with connection:
-        cursor = connection.execute(
-            """
-            INSERT INTO recordings
-                (user_id, pdf_id, path, duration_seconds, submitted)
-            VALUES (?, ?, ?, ?, 0)
-            """,
-            (uid, pdf_id, rel, duration),
-        )
-    return cursor.lastrowid
