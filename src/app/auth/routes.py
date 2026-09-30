@@ -30,9 +30,13 @@ def login():
     if request.method == "GET":
         return render_template("login.html")
     else:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(success=False, message="Invalid login request."), 400
         username = data.get('username')
         password = data.get('password')
+        if not isinstance(username, str) or not isinstance(password, str) or not username or not password:
+            return jsonify(success=False, message="Username and password are required."), 400
         db.check_login(username, password)
 
         if not g.user:

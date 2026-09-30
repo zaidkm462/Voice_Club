@@ -6,6 +6,7 @@ import config
 from flask import g
 
 from config import DATABASE
+from app.passwords import hash_password, verify_password
 
 
 def get_db_test():
@@ -23,15 +24,14 @@ def get_db():
     return g.db
 
 def check_login(username, password):
-    global g
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT * FROM accounts WHERE username = ? and password_hash=?", (username, password))
-    x = cur.fetchone()
-    if not x:
-        g.user = None
-    else:
-        g.user = x
+    g.user = None
+    if not isinstance(username, str) or not isinstance(password, str):
+        return g
+    account = get_db().execute(
+        "SELECT * FROM accounts WHERE username = ?", (username,)
+    ).fetchone()
+    if account is not None and verify_password(account["password_hash"], password):
+        g.user = account
     return g
 
 def close_db(error=None):
@@ -41,7 +41,6 @@ def close_db(error=None):
         db.close()
 
 def insert_token(id, token):
-    print("id: ", id, " token: ", token)
     conn = get_db()
     conn.cursor().execute(
             "INSERT INTO auth_tokens (account_id, token_hash) VALUES (?, ?)",
@@ -220,6 +219,7 @@ def get_submitted_recording(user_id):
 
 def create_user_account(full_name, username, password):
     db = get_db()
+    password_hash = hash_password(password)
 
     with db:
         cursor = db.execute(
@@ -233,7 +233,7 @@ def create_user_account(full_name, username, password):
             )
             VALUES (?, ?, ?, ?, ?)
             """,
-            (full_name, username, password, "user", "unsent"),
+            (full_name, username, password_hash, "user", "unsent"),
         )
 
         user_id = cursor.lastrowid
