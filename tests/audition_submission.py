@@ -96,28 +96,49 @@ def main():
         assert client.post(endpoint, data="x", headers=headers(3)).status_code == 415
         assert client.post(endpoint, data="{", content_type="application/json", headers=headers(3)).status_code == 400
         assert submit(101).status_code == 409
-        assert submit(102).status_code == 404
+        assert submit(102).get_json() == {"ok": True, "recording_id": 102, "status": "pending"}
         assert submit(103).status_code == 409
-        assert client.get(audio_path, headers=headers(2)).status_code == 404
-        assert submit(recording_id).get_json() == {"ok": True, "recording_id": recording_id, "submitted": True}
-        assert submit(100).status_code == 409
+        assert client.get(audio_path, headers=headers(2)).status_code == 200
+        assert submit(recording_id).get_json() == {"ok": True, "recording_id": recording_id, "status": "pending"}
+        assert submit(100).get_json() == {"ok": True, "recording_id": 100, "status": "pending"}
         for uid in (1, 2):
             response = client.get("/api/admin/users/3", headers=headers(uid))
             assert response.status_code == 200
             detail = response.get_json()
             assert detail["user"]["status"] == "pending"
-            assert detail["submitted_recording"]["recording_id"] == recording_id
+            assert {item["recording_id"] for item in detail["submitted_recordings"]} == {
+                recording_id, 100, 102
+            }
             assert client.get(audio_path, headers=headers(uid)).status_code == 200
             assert client.get(audio_path, headers={**headers(uid), "Range": "bytes=0-9"}).status_code == 206
         assert client.get(audio_path, headers=headers(4)).status_code == 404
-        for status in ("approved", "rejected"):
-            with connect(config.DATABASE) as connection:
-                connection.execute("UPDATE accounts SET status=? WHERE id=3", (status,))
-            assert submit(recording_id).status_code == 200
-            with connect(config.DATABASE) as connection:
-                assert connection.execute("SELECT status FROM accounts WHERE id=3").fetchone()[0] == status
-                assert connection.execute("SELECT COUNT(*) FROM recordings WHERE user_id=3").fetchone()[0] == 5
-        print("PASS: upload, submission, persistence, admin/owner visibility, media access, validation, draft preservation and safe retries")
+        review = client.post(
+            "/api/admin/users/3/decision",
+            json={"record_id": 102, "status": "approved"},
+            headers=headers(1),
+        )
+        assert review.status_code == 200
+        with connect(config.DATABASE) as connection:
+            assert connection.execute("SELECT status FROM recordings WHERE id=102").fetchone()[0] == "approved"
+            assert connection.execute("SELECT status FROM accounts WHERE id=3").fetchone()[0] == "pending"
+        assert submit(102).status_code == 409
+        reject = client.post(
+            "/api/admin/users/3/decision",
+            json={"record_id": 100, "status": "rejected"},
+            headers=headers(1),
+        )
+        assert reject.status_code == 200
+        assert submit(100).status_code == 409
+        assert client.post(
+            "/api/recordings/delete", json={"record_id": 102}, headers=headers(3)
+        ).status_code == 409
+        assert client.post(
+            "/api/recordings/delete", json={"record_id": 100}, headers=headers(3)
+        ).status_code == 200
+        assert client.post(
+            "/api/recordings/delete", json={"record_id": 103}, headers=headers(3)
+        ).status_code == 200
+        print("PASS: upload, per-record submission/review, persistence, media access, validation and protected records")
 
 
 if __name__ == "__main__":

@@ -52,7 +52,20 @@ def insert_token(id, token):
 def get_messages(uid):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, title, content, is_read, created_at FROM messages WHERE recipient_id = ?", (uid,))
+    cur.execute(
+        """
+        SELECT messages.id, messages.title, messages.content,
+               messages.is_read, messages.created_at
+        FROM messages
+        JOIN accounts ON accounts.id = ?
+        WHERE messages.recipient_id = ?
+           OR (messages.recipient_scope = 'owners' AND accounts.role = 'owner')
+           OR (messages.recipient_scope = 'admins' AND accounts.role = 'admin')
+           OR (messages.recipient_scope = 'users' AND accounts.role = 'user')
+        ORDER BY messages.created_at DESC, messages.id DESC
+        """,
+        (uid, uid),
+    )
     x = cur.fetchall()
     return [tuple(i) for i in x]
 
@@ -60,10 +73,19 @@ def get_recordings(uid):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""SELECT recordings.id, recordings.path, pdfs.path, duration_seconds,
-                        submitted, recordings.created_at, pdfs.name FROM recordings INNER JOIN pdfs
-                        ON recordings.pdf_id = pdfs.id where recordings.user_id=?;""", (uid,))
+                        recordings.status, recordings.created_at, pdfs.name
+                 FROM recordings INNER JOIN pdfs ON recordings.pdf_id = pdfs.id
+                 WHERE recordings.user_id=? ORDER BY recordings.created_at DESC, recordings.id DESC;""", (uid,))
     x = cur.fetchall()
     return [tuple(i) for i in x]
+
+
+def get_recording_count(uid):
+    row = get_db().execute(
+        "SELECT COUNT(*) AS count FROM recordings WHERE user_id = ?",
+        (uid,),
+    ).fetchone()
+    return row["count"]
 
 
 def get_admin_accounts():
@@ -140,6 +162,18 @@ def get_user_accounts():
     return [dict(row) for row in rows]
 
 
+def get_message_recipients():
+    rows = get_db().execute(
+        """
+        SELECT id, full_name, username, role, status, created_at
+        FROM accounts
+        ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 ELSE 3 END,
+                 created_at DESC, id DESC
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_user_account(user_id):
     db = get_db()
 
@@ -158,33 +192,31 @@ def get_user_account(user_id):
     return dict(row)
 
 
-def get_submitted_recording(user_id):
-    db = get_db()
-
-    row = db.execute(
+def get_account(account_id):
+    row = get_db().execute(
         """
-        SELECT
-            recordings.id AS recording_id,
-            recordings.path AS recording_path,
-            recordings.duration_seconds,
-            recordings.created_at,
-            pdfs.id AS pdf_id,
-            pdfs.name AS pdf_name,
-            pdfs.original_filename AS pdf_original_filename,
-            pdfs.path AS pdf_path
-        FROM recordings
-        INNER JOIN pdfs
-            ON pdfs.id = recordings.pdf_id
-        WHERE recordings.user_id = ?
-          AND recordings.submitted = 1
+        SELECT id, full_name, username, role, status, created_at
+        FROM accounts
+        WHERE id = ?
         """,
-        (user_id,),
+        (account_id,),
     ).fetchone()
+    return dict(row) if row is not None else None
 
-    if row is None:
-        return None
 
-    return dict(row)
+def get_submitted_recording(user_id):
+    rows = get_db().execute(
+        """
+        SELECT recordings.id AS recording_id, recordings.path AS recording_path,
+               recordings.status, recordings.duration_seconds, recordings.created_at,
+               pdfs.id AS pdf_id, pdfs.name AS pdf_name,
+               pdfs.original_filename AS pdf_original_filename, pdfs.path AS pdf_path
+        FROM recordings INNER JOIN pdfs ON pdfs.id = recordings.pdf_id
+        WHERE recordings.user_id = ? AND recordings.status != 'unsent'
+        ORDER BY recordings.created_at DESC, recordings.id DESC
+        """, (user_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 def create_user_account(full_name, username, password):
     db = get_db()
@@ -208,7 +240,7 @@ def create_user_account(full_name, username, password):
 
     return get_user_account(user_id)
 
-def create_user_message(sender_id, recipient_id, title, content):
+def create_user_message(sender_id, recipient_id, title, content, recipient_scope=None):
     db = get_db()
 
     with db:
@@ -217,12 +249,13 @@ def create_user_message(sender_id, recipient_id, title, content):
             INSERT INTO messages (
                 sender_id,
                 recipient_id,
+                recipient_scope,
                 title,
                 content
             )
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (sender_id, recipient_id, title, content),
+            (sender_id, recipient_id, recipient_scope, title, content),
         )
 
         message_id = cursor.lastrowid
@@ -233,6 +266,7 @@ def create_user_message(sender_id, recipient_id, title, content):
                 id,
                 sender_id,
                 recipient_id,
+                recipient_scope,
                 title,
                 content,
                 is_read,
@@ -327,35 +361,40 @@ def create_shared_pdf(name, original_filename, path, uploaded_by_id):
 
     return dict(row)
 
-def set_user_review_status(user_id, status):
+def recalculate_account_status(user_id):
+    """Update only automatic account states; explicit approved/rejected decisions win."""
+    db = get_db()
+    account = db.execute("SELECT status FROM accounts WHERE id = ?", (user_id,)).fetchone()
+    if account is None or account["status"] in ("approved", "rejected"):
+        return account["status"] if account else None
+    has_active = db.execute(
+        "SELECT 1 FROM recordings WHERE user_id = ? AND status IN ('pending', 'approved') LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    status = "pending" if has_active else "unsent"
+    db.execute("UPDATE accounts SET status = ? WHERE id = ?", (status, user_id))
+    return status
+
+
+def set_record_review_status(record_id, status, user_id=None):
     if status not in ("approved", "rejected"):
         raise ValueError("Invalid review status")
-
     db = get_db()
-
     with db:
-        cursor = db.execute(
-            """
-            UPDATE accounts
-            SET status = ?
-            WHERE id = ?
-              AND role = 'user'
-              AND EXISTS (
-                  SELECT 1
-                  FROM recordings
-                  WHERE recordings.user_id = accounts.id
-                    AND recordings.submitted = 1
-              )
-            """,
-            (status, user_id),
-        )
-
-        if cursor.rowcount == 0:
+        row = db.execute(
+            "SELECT user_id, status FROM recordings WHERE id = ? AND (? IS NULL OR user_id = ?)",
+            (record_id, user_id, user_id),
+        ).fetchone()
+        if row is None or row["status"] == "unsent":
             return None
-
-        user = get_user_account(user_id)
-
+        db.execute("UPDATE recordings SET status = ? WHERE id = ?", (status, record_id))
+        recalculate_account_status(row["user_id"])
+        user = get_user_account(row["user_id"])
     return user
+
+
+def set_user_review_status(user_id, status):
+    raise ValueError("Record-level review requires record_id")
 
 def get_user_deletion_summary(user_id):
     db = get_db()
@@ -472,30 +511,23 @@ def delete_user_account(user_id, confirmed_username):
 def submit_record(uid, record_id):
     connection = get_db()
     with connection:
-        # Serialize submissions and preserve an existing review decision.
         connection.execute("BEGIN IMMEDIATE")
-        account = connection.execute(
-            "SELECT role FROM accounts WHERE id = ?", (uid,)
-        ).fetchone()
+        account = connection.execute("SELECT role FROM accounts WHERE id = ?", (uid,)).fetchone()
         if account is None or account["role"] != "user":
             raise ValueError("forbidden")
         row = connection.execute(
-            """SELECT recordings.path, recordings.submitted
-               FROM recordings JOIN pdfs ON pdfs.id = recordings.pdf_id
-               WHERE recordings.id = ? AND recordings.user_id = ?
-                 AND (pdfs.owner_user_id IS NULL OR pdfs.owner_user_id = ?)""",
-            (record_id, uid, uid),
+            "SELECT path, status FROM recordings WHERE id = ? AND user_id = ?",
+            (record_id, uid),
         ).fetchone()
         if row is None:
             raise ValueError("not_found")
+        if row["status"] != "unsent":
+            raise ValueError("already_submitted")
         stored_path = row["path"]
-        if not isinstance(stored_path, str):
-            raise ValueError("missing_audio")
-        relative = stored_path.removeprefix("/storage/")
+        relative = stored_path.removeprefix("/storage/") if isinstance(stored_path, str) else ""
         parts = PurePosixPath(relative)
-        if (len(parts.parts) != 2 or parts.parts[0] != "recordings"
-                or str(parts) != relative or ".." in parts.parts
-                or "\\" in relative or ":" in relative):
+        if (len(parts.parts) != 2 or parts.parts[0] != "recordings" or str(parts) != relative
+                or ".." in parts.parts or "\\" in relative or ":" in relative):
             raise ValueError("missing_audio")
         try:
             root = Path(config.STORAGE_DIR).resolve()
@@ -504,34 +536,21 @@ def submit_record(uid, record_id):
                 raise ValueError("missing_audio")
         except OSError:
             raise ValueError("missing_audio") from None
-        if row["submitted"] == 1:
-            return True
-        if connection.execute(
-            "SELECT 1 FROM recordings WHERE user_id = ? AND submitted = 1", (uid,)
-        ).fetchone():
-            raise ValueError("already_submitted")
-        connection.execute(
-            "UPDATE recordings SET submitted = 1 WHERE id = ? AND user_id = ?", (record_id, uid)
-        )
-        connection.execute(
-            "UPDATE accounts SET status = 'pending' WHERE id = ?", (uid,)
-        )
+        connection.execute("UPDATE recordings SET status = 'pending' WHERE id = ?", (record_id,))
+        recalculate_account_status(uid)
     return True
 
 
 def delete_record(uid, record_id):
-    if not record_id:
+    if not isinstance(record_id, int) or record_id <= 0:
         return False
-
     connection = get_db()
-    row = connection.execute(
-        "SELECT user_id, submitted FROM recordings WHERE id = ?", (record_id,)
-    ).fetchone()
-    if row is None or row["user_id"] != uid or row["submitted"] == 1:
+    row = connection.execute("SELECT user_id, status FROM recordings WHERE id = ?", (record_id,)).fetchone()
+    if row is None or row["user_id"] != uid or row["status"] not in ("unsent", "rejected"):
         return False
-
     with connection:
         connection.execute("DELETE FROM recordings WHERE id = ?", (record_id,))
+        recalculate_account_status(uid)
     return True
 
 
@@ -565,11 +584,18 @@ def check_pdf_id(pdf_id):
 def add_record(uid, pdf_id, rel, duration):
     connection = get_db()
     with connection:
+        connection.execute("BEGIN IMMEDIATE")
+        count = connection.execute(
+            "SELECT COUNT(*) AS count FROM recordings WHERE user_id = ?",
+            (uid,),
+        ).fetchone()["count"]
+        if count >= config.MAX_RECORDS_UPLOADS:
+            raise ValueError("max_records_uploads")
         cursor = connection.execute(
             """
             INSERT INTO recordings
-                (user_id, pdf_id, path, duration_seconds, submitted)
-            VALUES (?, ?, ?, ?, 0)
+                (user_id, pdf_id, path, duration_seconds, status)
+            VALUES (?, ?, ?, ?, 'unsent')
             """,
             (uid, pdf_id, rel, duration),
         )

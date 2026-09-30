@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, render_template, g, request
+import config
 
 import app.db as db
 from app.decorators import login_required
@@ -54,7 +55,11 @@ def pages(section):
 @user_bp.route("/user/record")
 @login_required
 def record_page():
-    return render_template("user/record.html")
+    return render_template(
+        "user/record.html",
+        recording_count=db.get_recording_count(g.user["id"]),
+        max_record_uploads=config.MAX_RECORDS_UPLOADS,
+    )
 
 
 @user_bp.route("/api/user/data")
@@ -70,4 +75,3 @@ def get_data():
     }
 
     return jsonify(user)
-

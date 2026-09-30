@@ -45,14 +45,9 @@ def serve_storage_file(filename):
             SELECT 1
             FROM pdfs
             WHERE path IN (?, ?)
-              AND (
-                  owner_user_id IS NULL
-                  OR owner_user_id = ?
-                  OR ? = 1
-              )
             LIMIT 1
             """,
-            (stored_url, legacy_stored_url, user_id, int(is_admin)),
+            (stored_url, legacy_stored_url),
         ).fetchone()
 
     else:
@@ -63,7 +58,7 @@ def serve_storage_file(filename):
             WHERE path IN (?, ?)
               AND (
                   user_id = ?
-                  OR (? = 1 AND submitted = 1)
+                  OR ? = 1
               )
             LIMIT 1
             """,

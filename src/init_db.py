@@ -30,7 +30,7 @@ def init_database():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
 
         name TEXT NOT NULL,
-        original_filename TEXT NOT NULL,
+        original_filename TEXT,
         path TEXT NOT NULL,
 
         owner_user_id INTEGER,
@@ -58,8 +58,8 @@ def init_database():
 
         duration_seconds INTEGER,
 
-        submitted INTEGER NOT NULL DEFAULT 0
-            CHECK (submitted IN (0, 1)),
+        status TEXT NOT NULL DEFAULT 'unsent'
+            CHECK (status IN ('unsent', 'pending', 'approved', 'rejected')),
 
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -73,10 +73,11 @@ def init_database():
     );
 
 
-    CREATE TABLE "messages" (
+    CREATE TABLE IF NOT EXISTS "messages" (
 	"id"	INTEGER,
 	"sender_id"	INTEGER NOT NULL,
 	"recipient_id"	INTEGER NOT NULL,
+	"recipient_scope"	TEXT,
 	"content"	TEXT NOT NULL,
 	"is_read"	INTEGER NOT NULL DEFAULT 0 CHECK("is_read" IN (0, 1)),
 	"created_at"	TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -87,10 +88,7 @@ def init_database():
 );
 
 
-    CREATE UNIQUE INDEX IF NOT EXISTS
-        idx_one_submitted_recording_per_user
-    ON recordings(user_id)
-    WHERE submitted = 1;
+    DROP INDEX IF EXISTS idx_one_submitted_recording_per_user;
 
 
     CREATE INDEX IF NOT EXISTS idx_recordings_user
@@ -120,6 +118,61 @@ def init_database():
         ON DELETE CASCADE
 );
     
+    """)
+
+    recording_columns = {row[1] for row in conn.execute("PRAGMA table_info(recordings)")}
+    if "status" not in recording_columns:
+        conn.execute("ALTER TABLE recordings ADD COLUMN status TEXT NOT NULL DEFAULT 'unsent'")
+    if "submitted" in recording_columns:
+        conn.execute("""
+            UPDATE recordings
+            SET status = CASE
+                WHEN submitted = 0 THEN 'unsent'
+                WHEN (SELECT status FROM accounts WHERE accounts.id = recordings.user_id)
+                     IN ('approved', 'rejected')
+                    THEN (SELECT status FROM accounts WHERE accounts.id = recordings.user_id)
+                ELSE 'pending'
+            END
+            WHERE submitted = 1
+        """)
+    if "submitted" in recording_columns:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("ALTER TABLE recordings RENAME TO recordings_legacy")
+        conn.execute("""
+            CREATE TABLE recordings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                pdf_id INTEGER NOT NULL,
+                path TEXT NOT NULL,
+                duration_seconds INTEGER,
+                status TEXT NOT NULL DEFAULT 'unsent'
+                    CHECK (status IN ('unsent', 'pending', 'approved', 'rejected')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES accounts(id) ON DELETE CASCADE,
+                FOREIGN KEY (pdf_id) REFERENCES pdfs(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            INSERT INTO recordings
+                (id, user_id, pdf_id, path, duration_seconds, status, created_at)
+            SELECT id, user_id, pdf_id, path, duration_seconds, status, created_at
+            FROM recordings_legacy
+        """)
+        conn.execute("DROP TABLE recordings_legacy")
+        conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_recordings_status_user
+        ON recordings(user_id, status)
+    """)
+
+    message_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(messages)")
+    }
+    if "recipient_scope" not in message_columns:
+        conn.execute("ALTER TABLE messages ADD COLUMN recipient_scope TEXT")
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_messages_scope
+        ON messages(recipient_scope)
     """)
 
     conn.commit()

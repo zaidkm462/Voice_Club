@@ -1,6 +1,7 @@
 import os
 import random
 import traceback
+import time
 
 from flask import Blueprint, current_app, jsonify, render_template, request, g
 
@@ -35,7 +36,7 @@ def upload_pdf():
         print("only .pdf", name, f.filename)
         return jsonify({"error": "يُسمح بملفات PDF فقط"}), 400
 
-    fname = name + str(random.randint(0, 100)) + ".pdf"
+    fname = name.replace(" ", "_") + str(int(time.time()))  + ".pdf"
     f.save(os.path.join(current_app.root_path, os.path.join(PDF_DIR, fname)))
 
     rel = f"/storage/pdfs/"+fname

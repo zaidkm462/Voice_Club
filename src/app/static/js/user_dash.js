@@ -9,10 +9,10 @@ const STATUS_INDEX = {
     'تمت الموافقة': 2,
     'مرفوض': 3
 };
-// حالات التسجيل الفردي (draft / review / approved / rejected)
+// حالات التسجيل الفردي
 const ST = {
-    draft: ['لم يُرسل', 's0'],
-    review: ['جار المراجعة', 's1'],
+    unsent: ['لم يُرسل', 's0'],
+    pending: ['جار المراجعة', 's1'],
     approved: ['تمت الموافقة', 's2'],
     rejected: ['مرفوض', 's3']
 };
@@ -103,24 +103,15 @@ function applyData(data) {
 function basename(p) { if (!p) return ''; const parts = String(p).split(/[\\/]/); return parts[parts.length - 1] || ''; }
 function stripExt(n) { return String(n || '').replace(/\.[^.]+$/, ''); }
 
-// تسجيل: [id, audio_path, pdf_path, duration_seconds, submitted, created_at]
+// تسجيل: [id, audio_path, pdf_path, duration_seconds, status, created_at, pdf_name]
 function normalizeRecording(row) {
     const id = row[0];
     const audio = row[1] ? '/' + String(row[1]).replace(/^\/+/, '') : '';
     const pdf = row[2] || '';
     const dur = +row[3] || 0;
-    const sub = row[4];
+    const status = ['unsent', 'pending', 'approved', 'rejected'].includes(row[4]) ? row[4] : 'unsent';
     const date = String(row[5] || '').slice(0, 10);
     const title = String(row[6] || '');
-
-    // submitted is boolean; the account status holds the review decision.
-    let status = 'draft';
-    if (sub === 1) {
-        status = USER_STATUS === 'تمت الموافقة' ? 'approved'
-            : USER_STATUS === 'مرفوض' ? 'rejected' : 'review';
-    }
-
-
     return { id, title, date, dur, status, audio, pdf };
 }
 
@@ -176,7 +167,7 @@ function renderList() {
     <div class="col"><article class="card h-100"><div class="card-body d-flex flex-column gap-3 p-4">
       <div class="d-flex justify-content-between align-items-start gap-2">
         <h3 class="fs-5 fw-bolder mb-0" style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${r.title}</h3>
-        <span class="pill ${(ST[r.status] || ST.draft)[1]}"><i></i>${(ST[r.status] || ST.draft)[0]}</span>
+        <span class="pill ${(ST[r.status] || ST.unsent)[1]}"><i></i>${(ST[r.status] || ST.unsent)[0]}</span>
       </div>
       <div class="mute d-flex gap-3">
         <span><i class="bi bi-calendar3"></i> ${r.date ? new Date(r.date).toLocaleDateString('ar-IQ', { day: 'numeric', month: 'long' }) : ''}</span>
@@ -185,8 +176,8 @@ function renderList() {
       <div class="wave" aria-hidden="true">${bars(r.id, 34)}</div>
       <div class="d-flex gap-2 mt-auto" data-id="${r.id}">
         <button class="btn btn-gold flex-grow-1" data-a="play"><i class="bi bi-play-fill"></i> تشغيل</button>
-        <button class="btn btn-line" data-a="send" ${r.status !== 'draft' ? 'disabled' : ''}><i class="bi bi-send"></i> إرسال</button>
-        <button class="btn btn-line btn-del" data-a="del" aria-label="حذف" ${r.status !== 'draft' ? 'disabled' : ''}><i class="bi bi-trash3"></i></button>
+        <button class="btn btn-line" data-a="send" ${r.status !== 'unsent' ? 'disabled' : ''}><i class="bi bi-send"></i> إرسال</button>
+        <button class="btn btn-line btn-del" data-a="del" aria-label="حذف" ${!['unsent', 'rejected'].includes(r.status) ? 'disabled' : ''}><i class="bi bi-trash3"></i></button>
       </div>
     </div></article></div>`).join('')
         : `<div class="col-12"><div class="card"><div class="card-body text-center p-5"><i class="bi bi-mic fs-1 mute"></i><p class="fs-5 mb-3">لا توجد تسجيلات بعد.</p><a href="#" data-go="new" class="btn btn-gold">سجّل صوتك الآن</a></div></div></div>`;
@@ -206,7 +197,7 @@ async function submit_record(id, button) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'تعذر إرسال التسجيل');
-        if (data.submitted !== true || data.recording_id !== id) {
+        if (data.status !== 'pending' || data.recording_id !== id) {
             throw new Error('تعذر تأكيد الإرسال. حدّث الصفحة للتحقق.');
         }
         const refreshed = await loadData(true);
@@ -228,10 +219,32 @@ $('list').addEventListener('click', e => {
     const id = +b.parentElement.dataset.id, r = recs.find(x => x.id === id);
     if (!r) return;
     if (b.dataset.a === 'play') openReader(r);                       // ← فتح القارئ
-    if (b.dataset.a === 'send' && r.status === 'draft') submit_record(r.id, b);
-    if (b.dataset.a === 'del') { target = r; $('delName').textContent = r.title; M.del.show(); }
+    if (b.dataset.a === 'send' && r.status === 'unsent') submit_record(r.id, b);
+    if (b.dataset.a === 'del' && ['unsent', 'rejected'].includes(r.status)) { target = r; $('delName').textContent = r.title; M.del.show(); }
 });
-$('delOk').onclick = () => { recs = recs.filter(r => r !== target); M.del.hide(); refresh(); toast('تم حذف التسجيل'); };
+$('delOk').onclick = async () => {
+    if (!target) return;
+    const id = target.id;
+    $('delOk').disabled = true;
+    try {
+        const response = await fetch('/api/recordings/delete', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ record_id: id })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || 'تعذر حذف التسجيل');
+        recs = recs.filter(r => r.id !== id);
+        M.del.hide();
+        refresh();
+        toast('تم حذف التسجيل');
+    } catch (error) {
+        toast(error.message);
+    } finally {
+        $('delOk').disabled = false;
+    }
+};
 function refresh() { renderList(); renderStatus(); renderMsgs(); }
 
 /* ============ وضع القراءة: PDF بتقليب الصفحات + الصوت الحقيقي ============ */

@@ -3,6 +3,10 @@
    ============================================================ */
 const $ = id => document.getElementById(id);
 const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const reader = $('reader');
+const recordingCount = Number(reader.dataset.recordingCount);
+const maxRecordUploads = Number(reader.dataset.maxRecords);
+const recordingLimitReached = recordingCount >= maxRecordUploads;
 const toast = (m, icon = 'bi-info-circle') => {
     $('toastMsg').innerHTML = `<i class="bi ${icon}"></i><span>${m}</span>`;
     bootstrap.Toast.getOrCreateInstance($('toast'), { delay: 3200 }).show();
@@ -11,6 +15,17 @@ const modals = {
     name: new bootstrap.Modal($('nameModal')),
     choose: new bootstrap.Modal($('chooseModal'))
 };
+
+function applyRecordingLimit() {
+    if (!recordingLimitReached) return;
+    ['btnUpload', 'btnUpload2', 'btnChoose', 'btnChoose2', 'btnRec'].forEach(id => {
+        $(id).disabled = true;
+    });
+    $('recordLimitMessage').classList.remove('d-none');
+    $('recHint').textContent = 'لقد تجاوزت عدد التسجيلات';
+}
+
+applyRecordingLimit();
 
 /* ============================================================
    1) بيانات وهمية + دوال جلب/إرسال البيانات
@@ -101,6 +116,7 @@ async function loadBook(url, my) {
 }
 
 function openPdf(url, meta) {
+    if (recordingLimitReached) return;
     if (pdfSource && pdfSource.objUrl) URL.revokeObjectURL(pdfSource.objUrl);
     pdfSource = meta; loadToken++;
     loadBook(url, loadToken);
@@ -180,6 +196,7 @@ if (!canRecord) {
 }
 
 let stream = null, recorder = null, chunks = [], audioBlob = null, durationSec = 0;
+let recordingStopPromise = null;
 let recState = 'idle';   // idle | recording | paused | stopped
 let isSaveSuccessful = false;
 let discardFlag = false;
@@ -203,7 +220,7 @@ function getRecordedDuration() {
 function setRecUI() {
     const btn = $('btnRec'), dot = $('recDot'), wave =$('pWave'), play = $('btnPlay'), redo =$('btnRedo');
     btn.classList.remove('live'); wave.classList.remove('live'); dot.classList.remove('live');
-    btn.disabled = !canRecord || !pdfSource;
+    btn.disabled = recordingLimitReached || !canRecord || !pdfSource;
     play.classList.remove('live'); play.innerHTML = '<i class="bi bi-play-fill"></i>';
     redo.disabled = recState === 'idle';
     play.disabled = !audioBlob || recState === 'recording' || recState === 'paused';
@@ -267,6 +284,9 @@ async function startRecording() {
         stream.getTracks().forEach(t => t.stop()); return;
     }
 
+    recordingStopPromise = new Promise(resolve => {
+        recorder.__resolveStop = resolve;
+    });
     recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     recorder.onstop = () => {
         if (stream) stream.getTracks().forEach(t => t.stop());
@@ -276,6 +296,10 @@ async function startRecording() {
         if (!audioBlob) toast('لم يُسجَّل أي صوت، حاول مرة أخرى', 'bi-exclamation-triangle');
         recState = audioBlob ? 'stopped' : 'idle';
         resetWaveIdle(); setRecUI();
+        if (recorder.__resolveStop) {
+            recorder.__resolveStop(audioBlob);
+            recorder.__resolveStop = null;
+        }
     };
 
     recorder.start(100);
@@ -323,7 +347,11 @@ function finishRecording() {
         durationSec = tPaused;
     }
     if (actx) { actx.close().catch(() => { }); actx = null; }
-    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+        return recordingStopPromise;
+    }
+    return Promise.resolve(audioBlob);
 }
 
 function discardCurrent() {
@@ -340,7 +368,9 @@ function discardCurrent() {
 }
 
 $('btnRec').onclick = () => {
-    if (recState === 'idle' || recState === 'stopped') {
+    if (recordingLimitReached) {
+        toast('لقد تجاوزت عدد التسجيلات', 'bi-exclamation-triangle');
+    } else if (recState === 'idle' || recState === 'stopped') {
         startRecording();
     } else if (recState === 'recording') {
         pauseRecording();
@@ -394,7 +424,7 @@ $('btnSave').onclick = async () => {
     
     // إنهاء التسجيل إذا كان يعمل أو متوقفاً مؤقتاً قبل استخراج الـ AudioBlob
     if (recState === 'paused' || recState === 'recording') {
-        finishRecording();
+        await finishRecording();
     }
     
     // التحقق مجدداً من المدة قبل إرسال الطلب
@@ -411,6 +441,9 @@ $('btnSave').onclick = async () => {
     try {
         let pdfId = pdfSource.type === 'library' ? pdfSource.pdf_id : (await uploadPdf(pdfSource.name, pdfSource.file)).pdf_id;
         
+        if (!(audioBlob instanceof Blob) || audioBlob.size === 0) {
+            throw new Error('لم يكتمل التسجيل الصوتي');
+        }
         await uploadRecording(pdfId, durationSec, audioBlob);
         
         isSaveSuccessful = true;

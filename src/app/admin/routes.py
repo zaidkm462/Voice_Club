@@ -61,8 +61,15 @@ def get_users():
     users = db.get_user_accounts()
 
     return jsonify({
-        "users": users
+        "users": users,
+        "message_recipients": db.get_message_recipients(),
     })
+
+
+@admin_bp.route("/api/admin/messages/inbox", methods=["GET"])
+@admin_required
+def get_message_inbox():
+    return jsonify({"messages": db.get_messages(g.user["id"])})
 
 
 @admin_bp.route("/api/admin/users/<int:user_id>", methods=["GET"])
@@ -76,11 +83,11 @@ def get_user(user_id):
             "message": "المتسابق غير موجود."
         }), 404
 
-    submitted_recording = db.get_submitted_recording(user_id)
+    submitted_recordings = db.get_submitted_recording(user_id)
 
     return jsonify({
         "user": user,
-        "submitted_recording": submitted_recording
+        "submitted_recordings": submitted_recordings
     })
 
 
@@ -152,12 +159,12 @@ def create_user():
 )
 @admin_required
 def send_user_message(user_id):
-    user = db.get_user_account(user_id)
+    user = db.get_account(user_id)
 
     if user is None:
         return jsonify({
             "error": "user_not_found",
-            "message": "المتسابق غير موجود."
+            "message": "المستلم غير موجود."
         }), 404
 
     if not request.is_json:
@@ -209,6 +216,46 @@ def send_user_message(user_id):
         "message": "تم إرسال الرسالة.",
         "data": message
     }), 201
+
+
+@admin_bp.route("/api/admin/messages", methods=["POST"])
+@admin_required
+def send_group_message():
+    if g.user["role"] not in ("admin", "owner"):
+        return jsonify({
+            "error": "forbidden",
+            "message": "الإرسال الجماعي غير متاح لهذا الحساب."
+        }), 403
+    if not request.is_json:
+        return jsonify({
+            "error": "unsupported_media_type",
+            "message": "يجب إرسال البيانات بصيغة JSON."
+        }), 415
+
+    data = request.get_json(silent=True)
+    scope = data.get("recipient_scope") if isinstance(data, dict) else None
+    title = data.get("title") if isinstance(data, dict) else None
+    content = data.get("content") if isinstance(data, dict) else None
+    allowed_scopes = ("owners", "admins", "users") if g.user["role"] == "owner" else ("admins", "users")
+    if scope not in allowed_scopes:
+        return jsonify({"error": "invalid_recipient_scope", "message": "وجهة الإرسال غير صالحة."}), 400
+    if not isinstance(title, str) or not isinstance(content, str):
+        return jsonify({"error": "missing_fields", "message": "عنوان الرسالة ونصها مطلوبان."}), 400
+
+    title, content = title.strip(), content.strip()
+    if not title or not content:
+        return jsonify({"error": "empty_fields", "message": "لا يمكن إرسال رسالة فارغة."}), 400
+    if len(title) > 150 or len(content) > 5000:
+        return jsonify({"error": "invalid_length", "message": "العنوان أو نص الرسالة يتجاوز الطول المسموح."}), 400
+
+    message = db.create_user_message(
+        sender_id=g.user["id"],
+        recipient_id=g.user["id"],
+        recipient_scope=scope,
+        title=title,
+        content=content,
+    )
+    return jsonify({"message": "تم إرسال الرسالة.", "data": message}), 201
 
 
 @admin_bp.route("/api/admin/pdfs", methods=["GET"])
@@ -326,6 +373,13 @@ def review_user(user_id):
         }), 400
 
     status = data.get("status")
+    record_id = data.get("record_id")
+
+    if type(record_id) is not int or record_id <= 0:
+        return jsonify({
+            "error": "invalid_record_id",
+            "message": "A positive integer record_id is required."
+        }), 400
 
     if status not in ("approved", "rejected"):
         return jsonify({
@@ -341,7 +395,7 @@ def review_user(user_id):
             "message": "المتسابق غير موجود."
         }), 404
 
-    updated_user = db.set_user_review_status(user_id, status)
+    updated_user = db.set_record_review_status(record_id, status, user_id)
 
     if updated_user is None:
         return jsonify({

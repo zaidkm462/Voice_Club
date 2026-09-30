@@ -27,13 +27,13 @@ def submit():
     rec_id = data["record_id"]
     try:
         db.submit_record(uid, rec_id)
-        return jsonify(ok=True, recording_id=rec_id, submitted=True), 200
+        return jsonify(ok=True, recording_id=rec_id, status="pending"), 200
     except ValueError as error:
         errors = {
             "forbidden": (403, "Only contestants can submit auditions."),
             "not_found": (404, "Recording not found."),
             "missing_audio": (409, "The audio file is missing or empty."),
-            "already_submitted": (409, "Another audition has already been submitted."),
+            "already_submitted": (409, "This recording has already been submitted."),
         }
         code = str(error)
         if code not in errors:
@@ -47,16 +47,15 @@ def submit():
 @recordings_bp.route("/api/recordings/delete", methods=["POST"])
 @login_required
 def delete():
-    uid = g.user['id']
-    rec_id = request.json["record_id"]
-    try:
-        r = db.delete_record(uid, rec_id)
-        print(r)
-        if not r: return jsonify({}, 400)
-        return jsonify({}, 200)
-    except Exception as e:
-        #print(traceback.format_exc())
-        return jsonify({}, 400)
+    if not request.is_json:
+        return jsonify(error="invalid_content_type", message="Send a JSON request."), 415
+    data = request.get_json(silent=True)
+    rec_id = data.get("record_id") if isinstance(data, dict) else None
+    if type(rec_id) is not int or rec_id <= 0:
+        return jsonify(error="invalid_record_id", message="A positive integer record_id is required."), 400
+    if not db.delete_record(g.user["id"], rec_id):
+        return jsonify(error="delete_unavailable", message="Only unsent or rejected recordings can be deleted."), 409
+    return jsonify(ok=True, recording_id=rec_id), 200
 
 @recordings_bp.route('/api/recordings/upload', methods=['POST'])
 @login_required
@@ -90,5 +89,16 @@ def upload_recording():
     try:
         r_id = db.add_record(uid, pdf_id, rel, duration)     
         return jsonify({"ok": True, "recording_id": r_id}), 201
+    except ValueError as error:
+        if str(error) == "max_records_uploads":
+            try:
+                os.remove(os.path.join(RECORDING_DIR, fname))
+            except OSError:
+                current_app.logger.exception("Failed to remove rejected recording file")
+            return jsonify({
+                "error": "max_records_uploads",
+                "message": "لقد تجاوزت عدد التسجيلات المسموح به.",
+            }), 409
+        raise
     except Exception :    
         return jsonify({"ok": False}), 500

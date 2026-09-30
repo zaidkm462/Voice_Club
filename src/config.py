@@ -11,5 +11,7 @@ PDF_DIR = os.path.join(STORAGE_DIR, "pdfs")
 
 RECORDING_DIR = os.path.join(STORAGE_DIR, "recordings")
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "change-this-key")
+# Maximum number of recordings a contestant may upload.
+MAX_RECORDS_UPLOADS = 4
 
+SECRET_KEY = os.environ.get("SECRET_KEY", "change-this-key")

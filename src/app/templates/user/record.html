@@ -18,7 +18,7 @@
 <body>
 
 <!-- ===== منصة التسجيل: عرض PDF بتقليب الصفحات + تسجيل صوتي ===== -->
-<div id="reader">
+<div id="reader" data-recording-count="{{ recording_count }}" data-max-records="{{ max_record_uploads }}">
   <header class="rd-top d-flex flex-wrap align-items-center gap-2 px-3 px-lg-4 py-2">
     <a href="#" class="btn btn-line" id="rdBack" onclick="history.back();return false;"><i class="bi bi-arrow-right"></i><span class="d-none d-sm-inline"> رجوع</span></a>
     <button class="btn btn-line" id="btnUpload"><i class="bi bi-upload"></i><span class="d-none d-sm-inline"> رفع PDF</span></button>
@@ -36,6 +36,7 @@
       <i class="bi bi-file-earmark-pdf"></i>
       <p class="fs-5 fw-bold mb-1">لم تختر ملف PDF بعد</p>
       <p class="mute mb-4">ارفع ملفاً من جهازك أو اختر واحداً من المكتبة لتبدأ التسجيل</p>
+      <p id="recordLimitMessage" class="fs-5 fw-bold text-danger d-none">لقد تجاوزت عدد التسجيلات</p>
       <div class="d-flex gap-2 flex-wrap justify-content-center">
         <button class="btn btn-gold" id="btnUpload2"><i class="bi bi-upload"></i> رفع PDF</button>
         <button class="btn btn-line" id="btnChoose2"><i class="bi bi-collection"></i> اختيار من المكتبة</button>

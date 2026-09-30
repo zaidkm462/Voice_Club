@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const colors = { unsent: "secondary", pending: "warning", approved: "success", rejected: "danger" };
     const modal = bootstrap.Modal.getOrCreateInstance($("userDetailsModal"));
     let users = [];
+    let messageRecipients = [];
     let page = 1;
     const pageSize = 10;
     let selectedId = null;
@@ -33,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
             else link.removeAttribute("aria-current");
         });
         if (name === "pdfs") loadPdfs();
+        if (name === "messages") loadInbox();
         document.querySelectorAll(".dashboard-section").forEach((el) => {
             el.classList.toggle("d-none", el.id !== "section-" + name);
         });
@@ -67,6 +69,39 @@ document.addEventListener("DOMContentLoaded", () => {
         cell.textContent = message;
         row.append(cell);
         $("usersTableBody").replaceChildren(row);
+    }
+
+    async function loadInbox() {
+        const status = $("inboxStatus");
+        const list = $("inboxList");
+        status.textContent = "جارٍ تحميل الرسائل…";
+        list.replaceChildren();
+        try {
+            const data = await getJson("/api/admin/messages/inbox");
+            const messages = Array.isArray(data.messages) ? data.messages : [];
+            if (!messages.length) {
+                status.textContent = "لا توجد رسائل واردة.";
+                return;
+            }
+            status.textContent = "";
+            messages.forEach((message) => {
+                const card = document.createElement("article");
+                card.className = "border rounded p-3";
+                const title = document.createElement("h4");
+                title.className = "h6 mb-2";
+                title.textContent = message[1] || "بدون عنوان";
+                const content = document.createElement("p");
+                content.className = "mb-2";
+                content.textContent = message[2] || "";
+                const date = document.createElement("small");
+                date.className = "text-secondary";
+                date.textContent = message[4] || "";
+                card.append(title, content, date);
+                list.append(card);
+            });
+        } catch (error) {
+            status.textContent = error.message;
+        }
     }
 
     function cell(value) {
@@ -115,7 +150,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!select) return;
             const previous = select.value;
             select.replaceChildren(new Option("اختر متسابقاً", ""));
-            users.forEach((user) => select.add(new Option(user.full_name + " — " + user.username, String(user.id))));
+            if (id === "messageRecipient") {
+                select.add(new Option("جميع المشرفين", "scope:admins"));
+            }
+            messageRecipients.forEach((user) => select.add(new Option(
+                user.full_name + " — " + user.username + " (" + user.role + ")",
+                String(user.id)
+            )));
             select.value = previous;
         });
     }
@@ -135,6 +176,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const data = await getJson("/api/admin/users", controller.signal);
             if (!Array.isArray(data.users)) throw new Error("تعذر قراءة قائمة المتسابقين.");
             users = data.users;
+            messageRecipients = Array.isArray(data.message_recipients) ? data.message_recipients : [];
             setText("totalCount", users.length);
             ["pending", "approved", "unsent"].forEach((status) => {
                 setText(status + "Count", users.filter((user) => user.status === status).length);
@@ -144,6 +186,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             if (error.name === "AbortError") return;
             users = [];
+            messageRecipients = [];
             updateSelectors();
             ["totalCount", "pendingCount", "approvedCount", "unsentCount"].forEach((id) => setText(id, "—"));
             tableMessage("تعذر عرض القائمة.");
@@ -185,27 +228,89 @@ document.addEventListener("DOMContentLoaded", () => {
         setText("detailUsername", user.username);
         setText("detailStatus", labels[user.status] || user.status);
         setText("detailCreatedAt", user.created_at);
-        const recording = data.submitted_recording;
-        reviewHasSubmission = Boolean(recording);
-        reviewStatus = user.status;
+        const recordings = Array.isArray(data.submitted_recordings) ? data.submitted_recordings : [];
+        reviewHasSubmission = recordings.length > 0;
+        reviewStatus = null;
         updateReviewButtons();
-        show("noSubmittedRecording", !recording);
-        show("submittedRecordingDetails", Boolean(recording));
-        if (recording) {
-            setText("detailPdfName", recording.pdf_name);
+        show("noSubmittedRecording", !recordings.length);
+        const list = $("submittedRecordingsList");
+        list.replaceChildren();
+        recordings.forEach((recording) => {
+            const card = document.createElement("article");
+            card.className = "border rounded p-3";
+            const heading = document.createElement("div");
+            heading.className = "d-flex justify-content-between align-items-center gap-2 mb-2";
+            const title = document.createElement("strong");
+            title.textContent = recording.pdf_name || "تسجيل";
+            const badge = document.createElement("span");
+            badge.className = "badge text-bg-" + (colors[recording.status] || "secondary");
+            badge.textContent = labels[recording.status] || recording.status;
+            heading.append(title, badge);
+            const media = document.createElement("div");
+            media.className = "d-flex flex-wrap gap-2 align-items-center";
             const pdf = mediaUrl(recording.pdf_path);
             const audio = mediaUrl(recording.recording_path);
             if (pdf) {
-                $("detailPdfLink").href = pdf;
-                show("detailPdfLink", true);
+                const link = document.createElement("a");
+                link.href = pdf;
+                link.target = "_blank";
+                link.rel = "noopener noreferrer";
+                link.className = "btn btn-outline-dark btn-sm";
+                link.textContent = "فتح PDF";
+                media.append(link);
             }
-            if (audio) $("detailRecordingAudio").src = audio;
-            if (!pdf || !audio) {
-                setText("mediaError", "بعض روابط الملفات غير متاحة.");
-                show("mediaError", true);
+            if (audio) {
+                const player = document.createElement("audio");
+                player.src = audio;
+                player.controls = true;
+                player.preload = "none";
+                player.className = "flex-grow-1";
+                media.append(player);
             }
-        }
+            if (recording.status === "pending") {
+                const approve = document.createElement("button");
+                approve.type = "button";
+                approve.className = "btn btn-success btn-sm";
+                approve.textContent = "الموافقة";
+                approve.addEventListener("click", () => saveRecordReview(recording.recording_id, "approved"));
+                const reject = document.createElement("button");
+                reject.type = "button";
+                reject.className = "btn btn-outline-danger btn-sm";
+                reject.textContent = "الرفض";
+                reject.addEventListener("click", () => saveRecordReview(recording.recording_id, "rejected"));
+                media.append(approve, reject);
+            }
+            card.append(heading, media);
+            list.append(card);
+        });
         show("detailsContent", true);
+    }
+
+    async function saveRecordReview(recordId, status) {
+        if (reviewBusy || deleteBusy || !selectedId) return;
+        if (!window.confirm(status === "approved" ? "تأكيد الموافقة على هذا التسجيل؟" : "تأكيد رفض هذا التسجيل؟")) return;
+        reviewBusy = true;
+        updateReviewButtons();
+        try {
+            const response = await fetch("/api/admin/users/" + selectedId + "/decision", {
+                method: "POST",
+                headers: { Accept: "application/json", "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ record_id: recordId, status })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || "تعذر حفظ القرار.");
+            await loadUsers();
+            reviewBusy = false;
+            await loadUserDetails(selectedId);
+        } catch (error) {
+            setText("reviewAlert", error.message);
+            $("reviewAlert").className = "alert alert-danger";
+            show("reviewAlert", true);
+        } finally {
+            reviewBusy = false;
+            updateReviewButtons();
+        }
     }
 
     async function loadUserDetails(id) {
@@ -589,14 +694,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const button = $("sendMessageButton");
         if (button.disabled || !form.reportValidity()) return;
 
-        const recipientId = Number($("messageRecipient").value);
+        const recipientValue = $("messageRecipient").value;
+        const groupScope = recipientValue.startsWith("scope:") ? recipientValue.slice(6) : null;
+        const recipientId = Number(recipientValue);
         const recipientName = $("messageRecipient").selectedOptions[0]?.textContent || "";
         const payload = {
             title: $("messageTitle").value.trim(),
             content: $("messageBody").value.trim()
         };
         const alert = $("sendMessageAlert");
-        if (!Number.isSafeInteger(recipientId) || recipientId <= 0 || !payload.title || !payload.content) {
+        if ((!groupScope && (!Number.isSafeInteger(recipientId) || recipientId <= 0))
+            || groupScope !== null && !["admins", "users"].includes(groupScope)
+            || !payload.title || !payload.content) {
             alert.className = "alert alert-danger";
             alert.textContent = "اختر متسابقاً وأدخل عنوان الرسالة ونصها.";
             return;
@@ -614,11 +723,17 @@ document.addEventListener("DOMContentLoaded", () => {
         show("sendMessageAlert", false);
 
         try {
-            const response = await fetch("/api/admin/users/" + recipientId + "/messages", {
+            const response = await fetch(
+                groupScope
+                    ? "/api/admin/messages"
+                    : "/api/admin/users/" + recipientId + "/messages",
+                {
                 method: "POST",
                 headers: { Accept: "application/json", "Content-Type": "application/json" },
                 credentials: "same-origin",
-                body: JSON.stringify(payload)
+                body: JSON.stringify(groupScope
+                    ? { ...payload, recipient_scope: groupScope }
+                    : payload)
             });
             if (response.status === 401) throw new Error("سجّل الدخول ثم أعد المحاولة.");
             if (response.status === 403) throw new Error("لا تملك صلاحية إرسال الرسائل.");
