@@ -5,6 +5,13 @@ Based on the team's [Voice_Club](https://github.com/zaidkm462/Voice_Club) commit
 
 This is a clean source snapshot with fresh Git history. The real database, contestant media, local certificates/keys and environment secrets are intentionally excluded. The original legacy `src/tst` script is excluded because importing it writes into the configured database; use the isolated regression tests below instead.
 
+## Video:
+
+
+https://github.com/user-attachments/assets/df1cdbe2-d849-4b66-af82-94f26425a100
+
+
+
 ## Local setup (PowerShell, Python 3.11+)
 
 ```powershell
